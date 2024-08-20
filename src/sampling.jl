@@ -1,11 +1,11 @@
 struct BadRateBound <: Exception end
 Base.showerror(io::IO, e::BadRateBound) = print(io, "Defined rate bound invalid in the time interval.")
 
-struct ConstantRate end
-get_λmax(s::ConstantRate) = 0.0 
-get_L(s::ConstantRate) = Inf 
+struct GillespieMethod end
+get_λmax(s::GillespieMethod) = 0.0 
+get_L(s::GillespieMethod) = Inf 
 
-@inline function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::ConstantRate, model; ratemax=0, Lf=nothing)
+@inline function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::GillespieMethod, model; ratemax=0, Lf=nothing)
     pstate!(pmod, pvec, subsrules, model, subs, state, tspan[1])
     λ = ratef(state.pop_state, pvec, tspan[1])
     proposet = tspan[1] + randexp() / λ 

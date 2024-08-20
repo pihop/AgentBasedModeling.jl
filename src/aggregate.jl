@@ -90,7 +90,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
     return nothing
 end
 
-function sample_(aggregate::PopulationItxAggregator{ConstantRate,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; recompute=true) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; recompute=true) where {N1,cType,sType,F1,F2,N2,S}
     rxs = values(aggregate.rxs)
 
     aggregate.next_rx = 0

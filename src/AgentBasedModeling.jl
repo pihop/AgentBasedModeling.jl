@@ -49,7 +49,7 @@ module AgentBasedModeling
     export ThinningSampler, DirectSampler
 
     include("aggregate.jl")
-    export FirstReactionMethod, Extrande 
+    export FirstReactionMethod, ExtrandeMethod, GillespieMethod
 
     include("simulation.jl")
     export SimulationParameters, simulate
