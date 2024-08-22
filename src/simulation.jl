@@ -99,7 +99,6 @@ function simulate_internal(problem, agent, tspan, ps, solver; model, kwargs...)
     u0 = [Symbolics.unwrap.(substitute(p, Dict(agent.init_trait...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
     if !isempty(ps) 
         prob = remake(problem, u0=u0, tspan=tspan)
-#        display(prob)
         return solve(prob, solver; kwargs...) 
     else
         prob = remake(problem, u0=u0, tspan=tspan)
@@ -271,7 +270,7 @@ function log_products!(srx::SimulationReaction, state, rxtime, agents, model, re
 
             !isnothing(idx) && begin
                 push!(results.prods[name], 
-                    TraitValueRx(agent.init_trait[idx][1], agent.init_trait[idx][2], rxtime, agent.idx, srx.pitx.itxdef))
+                TraitValueRx(agent.init_trait[idx][1], agent.simulation[1][idx], rxtime, agent.idx, srx.pitx.itxdef))
                 continue
             end
         end
@@ -381,7 +380,6 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
             
             # Logging
             log_substrates!(srx, state, next_rx_time, deleted_agents, model, results)
-            log_products!(srx, state, next_rx_time, new_agents, model, results)
 
             # Remove agents involved in the current reaction and reactions with
             # them as substrates.
@@ -389,6 +387,8 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
 
             # Simulate traits of the new agents to the end of the tspan.   
             simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
+
+            log_products!(srx, state, next_rx_time, new_agents, model, results)
 
             # Add the new to the population state.
             remember_all_agents && push_to_pop!(all_agents, deleted_agents)
@@ -409,14 +409,16 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
         end
 
         pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
+        results.tend = state.t
         state.t ≥ params.tspan[end] && break
         pop_size ≥ params.maxpop && break
         
         showprogress && ProgressMeter.next!(progress, showvalues = [("Time", state.t), ("Populations size", pop_size)])
     end
+    log_snapshot!(state.t, params.snapshot, state, model, results)
 
     remember_all_agents && push_to_pop!(all_agents, state.pop)
     results.agents = all_agents 
-    remember_all_agents && begin results.final_pop = state.pop end
+    results.final_pop = state.pop
     return results
 end
