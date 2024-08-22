@@ -7,6 +7,7 @@ mutable struct SimulationResults
     agents
     final_pop
     interactions
+    tend
 
     function SimulationResults(model; snapshot)
         subs = Dict()
