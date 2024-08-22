@@ -65,7 +65,7 @@ get_L(s::FirstReactionMethod) = s.L
 
         proposet ≥ tspan[end] && return Inf
 
-        U = rand(Uniform())
+        U = rand()
         pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
         λt = ratef(state.pop_state, pvec, proposet)
 

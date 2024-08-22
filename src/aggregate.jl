@@ -74,7 +74,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
     if prop_ttnj < aggregate.next_rx_time 
         aggregate.next_rx_time = prop_ttnj
         cur_rate = zero(tspan[1])
-        UBmax = rand(Uniform(0, 1)) * aggregate.Bmax
+        UBmax = rand() * aggregate.Bmax
 
         for rx in rxs 
             pstate!(pmod_, pvec_, subsrules_, model, rx.substrates, state, prop_ttnj)
@@ -113,31 +113,6 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sTy
     aggregate.next_rx = rx.uid
 end
 
-#function sample_(aggregate::PopulationItxAggregator, state, model, params, tspan, method::FirstReactionMethod; kwargs...) 
-#    rxs = values(aggregate.rxs)
-#
-#    aggregate.next_rx = 0
-#    aggregate.next_rx_time = tspan[end]
-#    
-#    isempty(rxs) && return nothing
-#      
-#    pop_ = state.pop_state
-#    pvec_ = first(rxs).pitx.pvec
-#    pmod_ = first(rxs).pitx.pmod
-#    subsrules_ = first(rxs).pitx.subsrules
-#
-#    for rx in rxs 
-#        ratemax = rx.pitx.ratefmax
-#        substrates = rx.substrates
-#        reaction_time = sample_first_arrival(
-#            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax)
-#        reaction_time < aggregate.next_rx_time && begin
-#            aggregate.next_rx = rx.uid
-#            aggregate.next_rx_time = reaction_time
-#        end
-#    end
-#end
-#
 function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod ,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
     rxs = values(aggregate.rxs)
 
@@ -150,14 +125,16 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod ,N1,cTyp
     pvec_ = first(rxs).pitx.pvec
     pmod_ = first(rxs).pitx.pmod
     subsrules_ = first(rxs).pitx.subsrules
+    
+    ratemax = first(rxs).pitx.ratefmax
+    lookahead = first(rxs).pitx.Lf
 
     for rx in rxs 
-        ratemax = rx.pitx.ratefmax
         substrates = rx.substrates
-        lookahead = rx.pitx.Lf
         reaction_time = sample_first_arrival(
             rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
-        reaction_time <= aggregate.next_rx_time && begin
+
+        reaction_time < aggregate.next_rx_time && begin
             aggregate.next_rx_time = reaction_time
             aggregate.next_rx = rx.uid
         end
