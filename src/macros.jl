@@ -118,23 +118,3 @@ end
 macro interaction(ex)
     process_population_itx(ex)
 end
-
-wrapperize(x) = esc(x)
-
-function wrapperize(expr::Expr)
-	if expr.head == :block
-		return Expr(:block, wrapperize.(expr.args)...)
-	elseif expr.head == :tuple
-		return Expr(:tuple, wrapperize.(expr.args)...)
-	elseif @capture(expr, (inputs__,) -> output_)
-		return :(FunctionWrapper{$(wrapperize(output)), Tuple{$(wrapperize.(inputs)...)}})
-	elseif @capture(expr, (input_) -> output_)
-		return :(FunctionWrapper{$(wrapperize(output)), Tuple{$(wrapperize(input))}})
-	else
-		error("I can only handle expressions of the form `(inputs...) -> output`")
-	end
-end
-
-macro fn(expr)
-    wrapperize(expr)
-end
