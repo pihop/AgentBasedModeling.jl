@@ -11,7 +11,7 @@ module AgentBasedModeling
     import ModelingToolkit: value
 #    using DataStructures
 #    MT = ModelingToolkit
-    using Distributions 
+#    using Distributions 
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using JumpProcesses
@@ -19,8 +19,8 @@ module AgentBasedModeling
     using StatsBase
     using ProgressMeter
     using Random
-    using FunctionWrappers
-    import FunctionWrappers: FunctionWrapper
+#    using FunctionWrappers
+#    import FunctionWrappers: FunctionWrapper
     using CommonSolve 
     using Interpolations
     import Interpolations: scale
@@ -43,7 +43,6 @@ module AgentBasedModeling
     export AgentDynamics, AgentState, PopulationModelDef, ParameterCnx, AgeConnection, Variable, TraitTransition, PopulationItx
     export TransitionDef
     export EmptyTraitProblem
-    export BinomialParition
 
     include("sampling.jl")
     export ThinningSampler, DirectSampler
@@ -56,4 +55,5 @@ module AgentBasedModeling
 
     include("macros.jl")
     export @interaction
+
 end
