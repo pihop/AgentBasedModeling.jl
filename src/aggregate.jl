@@ -90,30 +90,35 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
     return nothing
 end
 
-function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; recompute=true) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
     rxs = values(aggregate.rxs)
 
     aggregate.next_rx = 0
-    aggregate.next_rx_time = Inf
-
+    aggregate.next_rx_time = Inf 
+    
     isempty(rxs) && return nothing
-
-    rx = first(rxs)
-    substrates = rx.substrates
-
+      
     pop_ = state.pop_state
     pvec_ = rx.pitx.pvec
     pmod_ = rx.pitx.pmod
     subsrules_ = rx.pitx.subsrules
+   
+    for rx in rxs 
+        substrates = rx.substrates
+        ratemax = rx.pitx.ratefmax
+        lookahead = rx.pitx.Lf
 
-    pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
-    
-    sum_rate = length(rxs) * rx.pitx.ratef(pop_, pvec_, tspan[1])
-    aggregate.next_rx_time = tspan[1] + randexp() / sum_rate
-    aggregate.next_rx = rx.uid
+        reaction_time = sample_first_arrival(
+            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
+
+        reaction_time < aggregate.next_rx_time && begin
+            aggregate.next_rx_time = reaction_time
+            aggregate.next_rx = rx.uid
+        end
+    end
 end
 
-function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod ,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
     rxs = values(aggregate.rxs)
 
     aggregate.next_rx = 0
@@ -125,15 +130,13 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod ,N1,cTyp
     pvec_ = first(rxs).pitx.pvec
     pmod_ = first(rxs).pitx.pmod
     subsrules_ = first(rxs).pitx.subsrules
-    
     ratemax = first(rxs).pitx.ratefmax
     lookahead = first(rxs).pitx.Lf
-
+   
     for rx in rxs 
         substrates = rx.substrates
         reaction_time = sample_first_arrival(
             rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
-
         reaction_time < aggregate.next_rx_time && begin
             aggregate.next_rx_time = reaction_time
             aggregate.next_rx = rx.uid
