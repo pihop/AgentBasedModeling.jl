@@ -93,10 +93,10 @@ function make_reactions!(agents, state, model::PopulationModel, tspan, params; m
     end
 end
 
-function simulate_internal(problem, agent, tspan, ps, solver; model, kwargs...)
+function simulate_internal(problem, agent, init, tspan, ps, solver; model, kwargs...)
 #    pnew = Tuple(Symbolics.unwrap.(substitute(p, Dict(ps...))) for p in parameters(model.traitdefs[agent.sym].dynamics))
 
-    u0 = [Symbolics.unwrap.(substitute(p, Dict(agent.init_trait...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
+    u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
     if !isempty(ps) 
         prob = remake(problem, u0=u0, tspan=tspan)
         return solve(prob, solver; kwargs...) 
@@ -107,11 +107,10 @@ function simulate_internal(problem, agent, tspan, ps, solver; model, kwargs...)
 end
 
 function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver; model)
+    init = agent.init_trait
     sim = simulate_internal(
-        problem, agent, (agent.btime, tspan[end]), ps, solver; model=model)
+        problem, agent, init, (agent.btime, tspan[end]), ps, solver; model=model)
 
-    k_ = first.(agent.init_trait)
-    agent.init_trait = Tuple(k_ .=> sim(tspan[end]; idxs=collect(k_)))
     agent.simulation = sim
     Interpolations.deduplicate_knots!(agent.simulation.t)
     agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
@@ -122,9 +121,11 @@ function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, s
 end
 
 function append_sim!(problem, agent, agentsim::ODESolution, tspan, ps, solver; model)
-    sim = simulate_internal(problem, agent, tspan, ps, solver; model=model)
     k_ = first.(agent.init_trait)
-    agent.init_trait = Tuple(k_ .=> sim(tspan[end]; idxs=collect(k_)))
+    init = Tuple(k_ .=> agent.simulation(tspan[1]; idxs=collect(k_)))
+
+    sim = simulate_internal(problem, agent, init, tspan, ps, solver; model=model)
+
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
         :NoAlgorithm,
@@ -166,6 +167,7 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
     new_agents = vcat(fill.(products, prodstoich)...)
     new_traits = trait_transition(srx.pitx, new_agents, srx.substrates, srx.pitx.subsrules, state, model, time)
 
+    pstate!(srx.pitx.pmod, srx.pitx.pvec, srx.pitx.subsrules, model, srx.substrates, state, time)
     varsubs = variable_subs(srx.pitx.itxdef.vars, srx.pitx.pvec, srx.pitx.psymbs)
 
     for (i, agent) in enumerate(new_agents)
@@ -270,7 +272,7 @@ function log_products!(srx::SimulationReaction, state, rxtime, agents, model, re
 
             !isnothing(idx) && begin
                 push!(results.prods[name], 
-                TraitValueRx(agent.init_trait[idx][1], agent.simulation[1][idx], rxtime, agent.idx, srx.pitx.itxdef))
+                    TraitValueRx(agent.init_trait[idx][1], agent.init_trait[idx][2], rxtime, agent.idx, srx.pitx.itxdef))
                 continue
             end
         end
@@ -373,7 +375,7 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
         next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
         rxidx = state.srxs[rx_channel].next_rx 
 
-        if next_rx_time ≤ tend && rxidx != 0
+        if next_rx_time < tend && rxidx != 0
             srx = state.srxs[rx_channel].rxs[rxidx]
             new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
             update_dtime!(next_rx_time, deleted_agents, state.pop)
@@ -409,13 +411,13 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
         end
 
         pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
-        results.tend = state.t
         state.t ≥ params.tspan[end] && break
         pop_size ≥ params.maxpop && break
         
         showprogress && ProgressMeter.next!(progress, showvalues = [("Time", state.t), ("Populations size", pop_size)])
     end
     log_snapshot!(state.t, params.snapshot, state, model, results)
+    results.tend = state.t
 
     remember_all_agents && push_to_pop!(all_agents, state.pop)
     results.agents = all_agents 
