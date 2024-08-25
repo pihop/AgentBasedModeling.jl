@@ -5,7 +5,7 @@ struct GillespieMethod end
 get_λmax(s::GillespieMethod) = 0.0 
 get_L(s::GillespieMethod) = Inf 
 
-@inline function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::GillespieMethod, model; ratemax=0, Lf=nothing)
+function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::GillespieMethod, model; ratemax=0, Lf=nothing)
     pstate!(pmod, pvec, subsrules, model, subs, state, tspan[1])
     λ = ratef(state.pop_state, pvec, tspan[1])
     proposet = tspan[1] + randexp() / λ 
@@ -44,7 +44,7 @@ Base.show(io::IO, sampler::FirstReactionMethod) = print(io, "First reaction meth
 get_λmax(s::FirstReactionMethod) = s.λmax
 get_L(s::FirstReactionMethod) = s.L
 
-@inline function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::FirstReactionMethod, model; ratemax, Lf)
+function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::FirstReactionMethod, model; ratemax, Lf)
     proposet = tspan[1]
     pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
 
@@ -72,7 +72,7 @@ get_L(s::FirstReactionMethod) = s.L
         if λt / λmax > 1.0 
             @error "Bound evaluated as $(λmax) with rate evaluated as $(λt). $(ratef)"
             throw(BadRateBound) 
-        elseif (U ≤ λt / λmax) 
+        elseif (U*λmax ≤ λt) 
             return proposet
         end
     end
