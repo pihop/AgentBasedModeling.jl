@@ -69,7 +69,7 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
         pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
         λt = ratef(state.pop_state, pvec, proposet)
 
-        if λt / λmax > 1.0 
+        if λt > λmax  
             @error "Bound evaluated as $(λmax) with rate evaluated as $(λt). $(ratef)"
             throw(BadRateBound) 
         elseif (U*λmax ≤ λt) 
