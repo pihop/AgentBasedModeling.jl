@@ -162,6 +162,20 @@ function pstate!(pmod, pvec, subsrules, model, substrates, state, t::Float64)
     end
 end
 
+struct HybridSDEDynamics
+    continuous
+    discrete
+end
+
+function ModelingToolkit.unknowns(hybrid::HybridSDEDynamics)
+    uks = unique([unknowns(hybrid.continuous)..., unknowns(hybrid.discrete)...])
+    filter(x -> !ModelingToolkit.isbrownian(x), uks)
+end
+
+function ModelingToolkit.parameters(hybrid::HybridSDEDynamics)
+    return unique([parameters(hybrid.continuous)..., parameters(hybrid.discrete)...])
+end
+
 struct AgentDynamics{D,N}
     dynamics::D
     constants::NTuple{N, Num}
@@ -170,8 +184,14 @@ end
 
 function AgentDynamics(dynamics::Union{Vector,Tuple}, constants) 
     if length(dynamics) > 1
-        dynamics_ = extend(dynamics...)
-    else 
+        try  
+            dynamics_ = extend(dynamics...)
+        catch
+            @error "Extending SDE with reaction network currently requires the following workaround: specify 
+                HybridSDEDynamics(continuous::SDESystem, discrete::ReactionNetwork) as the agent dynamics and construct
+                the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
+        end
+    elseif length(dynamics) == 1
         dynamics_ = dynamics[1]
     end
 
@@ -269,6 +289,24 @@ function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwarg
     Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
 end
 
+function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics, N}, tspan, ps; jumpaggregator) where {T,N}
+    keys = Num[]
+    vals = Tuple{Bool, Int}[]
+    for (i, c) in enumerate(dynamics.constants)
+        push!(keys, c)             
+        push!(vals, (true, i))             
+    end
+   
+    for (i, c) in enumerate(unknowns(dynamics.dynamics))
+        push!(keys, c)             
+        push!(vals, (false, i))             
+    end
+
+    prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
+    Trait(sym, prob, Dict(keys .=> vals))
+end
+
+
 function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, tspan, ps; jumpaggregator) where {T,N}
     keys = Num[]
     vals = Tuple{Bool, Int}[]
@@ -306,18 +344,41 @@ end
 
 function make_hybrid(trait, init, tspan, ps; jumpaggregator)
     eqs = setdiff(equations(trait), reactions(trait))
-#    display(eqs)
+
     @named rn = ReactionSystem(
         reactions(trait), 
         ModelingToolkit.get_iv(trait), 
-        unknowns(trait), 
+        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)), 
         parameters(trait))
 
-    @named odes = ODESystem([eqs...], 
+    @named odes = ODEProblem([eqs...], 
         ModelingToolkit.get_iv(trait), unknowns(trait), parameters(trait);)
     jsys = convert(JumpSystem, complete(rn))
-    oprob = ODEProblem{true}(complete(odes), init, tspan, ps;)
+
+    oprob = ODEProblem(complete(odes), init, tspan, ps;)
     JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions = (true,true))
+end
+
+function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
+    eqs = equations(trait.continuous)
+    rxs = reactions(trait.discrete)  
+    
+    @named rn = ReactionSystem(
+        rxs, 
+        ModelingToolkit.get_iv(trait.discrete), 
+        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
+        parameters(trait))
+
+    jsys = JumpInputs(complete(rn), init, tspan, ps)
+    jprob = JumpProblem(jsys)
+
+    jumps = [] 
+    !isnothing(jprob.regular_jump) && push!(jumps, jprob.regular_jump)
+    !isnothing(jprob.massaction_jump) && push!(jumps, jprob.massaction_jump)
+    !isempty(jprob.variable_jumps) && push!(jumps, jprob.variable_jumps...)
+
+    oprob = SDEProblem(complete(trait.continuous), init, tspan, ps;)
+    JumpProblem(oprob, jumpaggregator, jumps...; save_positions = (true,true))
 end
 
 let x = Threads.Atomic{Int}(0)
@@ -331,7 +392,7 @@ let x = Threads.Atomic{Int}(0)
         uid::idType#UInt
         init_trait::NTuple{N1, Pair{Num,Float64}}
         consts::NTuple{N2, Pair{Num,Float64}}
-        simulation::Union{Nothing, ODESolution}
+        simulation::Union{Nothing, ODESolution, RODESolution}
         simulation_interp
 
         function AgentState(btime, sym, init_trait, consts, parents::P) where {P}

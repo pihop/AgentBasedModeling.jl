@@ -43,6 +43,7 @@ module AgentBasedModeling
     export AgentDynamics, AgentState, PopulationModelDef, ParameterCnx, AgeConnection, Variable, TraitTransition, PopulationItx
     export TransitionDef
     export EmptyTraitProblem
+    export HybridSDEDynamics
 
     include("sampling.jl")
     export ThinningSampler, DirectSampler

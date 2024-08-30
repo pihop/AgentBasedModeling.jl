@@ -120,7 +120,7 @@ function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, s
     nothing
 end
 
-function append_sim!(problem, agent, agentsim::ODESolution, tspan, ps, solver; model)
+function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution}, tspan, ps, solver; model)
     k_ = first.(agent.init_trait)
     init = Tuple(k_ .=> agent.simulation(tspan[1]; idxs=collect(k_)))
 
