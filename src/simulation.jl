@@ -132,7 +132,7 @@ function append_sim!(problem, agent, agentsim::ODESolution, tspan, ps, solver; m
         [agentsim.t; sim.t], 
         [agentsim.u; sim.u], 
         successful_retcode=true)
-    Interpolations.deduplicate_knots!(agent.simulation.t)
+    Interpolations.deduplicate_knots!(agent.simulation.t; move_knots = true)
     agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
 end
 
@@ -370,52 +370,68 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
     tend = minimum([state.t + params.Δt, params.tspan[end]])
     recompute_bounds = true
 
-    while true
-        sample_aggregates!(state.srxs, state, model, params, (state.t, tend), recompute=recompute_bounds)
-        next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
-        rxidx = state.srxs[rx_channel].next_rx 
+    try 
+        while true
+            sample_aggregates!(state.srxs, state, model, params, (state.t, tend), recompute=recompute_bounds)
+            next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
+            rxidx = state.srxs[rx_channel].next_rx 
 
-        if next_rx_time < tend && rxidx != 0
-            srx = state.srxs[rx_channel].rxs[rxidx]
-            new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
-            update_dtime!(next_rx_time, deleted_agents, state.pop)
+            if next_rx_time < tend && rxidx != 0
+                srx = state.srxs[rx_channel].rxs[rxidx]
+                new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
+                update_dtime!(next_rx_time, deleted_agents, state.pop)
+                
+                # Logging
+                log_substrates!(srx, state, next_rx_time, deleted_agents, model, results)
+
+                # Remove agents involved in the current reaction and reactions with
+                # them as substrates.
+                filter_rxs!(state, deleted_agents)
+
+                # Simulate traits of the new agents to the end of the tspan.   
+                simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
+
+                log_products!(srx, state, next_rx_time, new_agents, model, results)
+
+                # Add the new to the population state.
+                remember_all_agents && push_to_pop!(all_agents, deleted_agents)
+                push_to_pop!(state.pop, new_agents)
+
+                # New reactions.
+                make_reactions!(new_agents, state, model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
+                state.t = next_rx_time 
+                save_interactions && push!(results.interactions, (next_rx_time, srx, state.pop))
+                update_pop_state!(state, model)
+            elseif next_rx_time < tend && rxidx == 0 
+                state.t = next_rx_time 
+            else 
+                state.t = tend 
+                tend = minimum([state.t + params.Δt, params.tspan[end]])
+                simulate_traits!(state.pop, state.t, tend, params; model=model)
+                log_snapshot!(state.t, params.snapshot, state, model, results)
+            end
+
+            pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
+            state.t ≥ params.tspan[end] && break
+            pop_size ≥ params.maxpop && break
             
-            # Logging
-            log_substrates!(srx, state, next_rx_time, deleted_agents, model, results)
-
-            # Remove agents involved in the current reaction and reactions with
-            # them as substrates.
-            filter_rxs!(state, deleted_agents)
-
-            # Simulate traits of the new agents to the end of the tspan.   
-            simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
-
-            log_products!(srx, state, next_rx_time, new_agents, model, results)
-
-            # Add the new to the population state.
-            remember_all_agents && push_to_pop!(all_agents, deleted_agents)
-            push_to_pop!(state.pop, new_agents)
-
-            # New reactions.
-            make_reactions!(new_agents, state, model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
-            state.t = next_rx_time 
-            save_interactions && push!(results.interactions, (next_rx_time, srx, state.pop))
-            update_pop_state!(state, model)
-        elseif next_rx_time < tend && rxidx == 0 
-            state.t = next_rx_time 
-        else 
-            state.t = tend 
-            tend = minimum([state.t + params.Δt, params.tspan[end]])
-            simulate_traits!(state.pop, state.t, tend, params; model=model)
-            log_snapshot!(state.t, params.snapshot, state, model, results)
+            showprogress && ProgressMeter.next!(progress, showvalues = [("Time", state.t), ("Populations size", pop_size)])
         end
-
-        pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
-        state.t ≥ params.tspan[end] && break
-        pop_size ≥ params.maxpop && break
-        
-        showprogress && ProgressMeter.next!(progress, showvalues = [("Time", state.t), ("Populations size", pop_size)])
+    catch e
+        if e isa InterruptException
+            println("Simulation interrupted! Saving results.")
+            log_snapshot!(state.t, params.snapshot, state, model, results)
+            results.tend = state.t
+      
+            remember_all_agents && push_to_pop!(all_agents, state.pop)
+            results.agents = all_agents 
+            results.final_pop = state.pop
+            return results
+        else
+            rethrow(e)
+        end
     end
+
     log_snapshot!(state.t, params.snapshot, state, model, results)
     results.tend = state.t
 
