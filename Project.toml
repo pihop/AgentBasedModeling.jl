@@ -24,5 +24,9 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
+[compat]
+Catalyst = "14"
+julia = "1.10"
+
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
