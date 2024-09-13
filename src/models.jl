@@ -168,12 +168,12 @@ struct HybridSDEDynamics
 end
 
 function ModelingToolkit.unknowns(hybrid::HybridSDEDynamics)
-    uks = unique([unknowns(hybrid.continuous)..., unknowns(hybrid.discrete)...])
-    filter(x -> !ModelingToolkit.isbrownian(x), uks)
+    uks = unknowns(hybrid.continuous)
+#    filter(x -> !ModelingToolkit.isbrownian(x), uks)
 end
 
 function ModelingToolkit.parameters(hybrid::HybridSDEDynamics)
-    return unique([parameters(hybrid.continuous)..., parameters(hybrid.discrete)...])
+#    return unique([parameters(hybrid.continuous)..., parameters(hybrid.discrete)...])
 end
 
 struct AgentDynamics{D,N}
@@ -362,23 +362,26 @@ end
 function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
     eqs = equations(trait.continuous)
     rxs = reactions(trait.discrete)  
-    
+
     @named rn = ReactionSystem(
         rxs, 
         ModelingToolkit.get_iv(trait.discrete), 
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
-        parameters(trait))
+        first.(ps))
 
-    jsys = JumpInputs(complete(rn), init, tspan, ps)
-    jprob = JumpProblem(jsys)
+    jsys = convert(JumpSystem,  complete(rn))
+   
+    @named sde = SDESystem(
+        eqs,
+        vcat(trait.continuous.noiseeqs...),
+        ModelingToolkit.get_iv(trait.continuous),
+        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
+        first.(ps))
 
-    jumps = [] 
-    !isnothing(jprob.regular_jump) && push!(jumps, jprob.regular_jump)
-    !isnothing(jprob.massaction_jump) && push!(jumps, jprob.massaction_jump)
-    !isempty(jprob.variable_jumps) && push!(jumps, jprob.variable_jumps...)
+    jsys = convert(JumpSystem, complete(rn))
 
-    oprob = SDEProblem(complete(trait.continuous), init, tspan, ps;)
-    JumpProblem(oprob, jumpaggregator, jumps...; save_positions = (true,true))
+    oprob = SDEProblem(complete(sde), init, tspan, ps;) 
+    JumpProblem(complete(jsys), oprob, jumpaggregator; )
 end
 
 let x = Threads.Atomic{Int}(0)
