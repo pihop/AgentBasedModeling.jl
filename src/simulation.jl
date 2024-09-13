@@ -94,16 +94,9 @@ function make_reactions!(agents, state, model::PopulationModel, tspan, params; m
 end
 
 function simulate_internal(problem, agent, init, tspan, ps, solver; model, kwargs...)
-#    pnew = Tuple(Symbolics.unwrap.(substitute(p, Dict(ps...))) for p in parameters(model.traitdefs[agent.sym].dynamics))
-
     u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
-    if !isempty(ps) 
-        prob = remake(problem, u0=u0, tspan=tspan)
-        return solve(prob, solver; kwargs...) 
-    else
-        prob = remake(problem, u0=u0, tspan=tspan)
-        return solve(prob, solver; kwargs...) 
-    end
+    prob = remake(problem, u0=u0, tspan=tspan)
+    return solve(prob, solver; kwargs...) 
 end
 
 function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver; model)
