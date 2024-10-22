@@ -92,6 +92,7 @@ end
 
 function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
     rxs = values(aggregate.rxs)
+ #   display(values(aggregate.rxs))
 
     aggregate.next_rx = 0
     aggregate.next_rx_time = Inf 
@@ -99,21 +100,21 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sTy
     isempty(rxs) && return nothing
       
     pop_ = state.pop_state
-    pvec_ = rx.pitx.pvec
-    pmod_ = rx.pitx.pmod
-    subsrules_ = rx.pitx.subsrules
+    pvec_ = first(rxs).pitx.pvec
+    pmod_ = first(rxs).pitx.pmod
+    subsrules_ = first(rxs).pitx.subsrules
    
     for rx in rxs 
-        substrates = rx.substrates
-        ratemax = rx.pitx.ratefmax
-        lookahead = rx.pitx.Lf
+        substrates = first(rxs).substrates
+        ratemax = first(rxs).pitx.ratefmax
+        lookahead = first(rxs).pitx.Lf
 
         reaction_time = sample_first_arrival(
-            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
+            first(rxs).pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
 
         reaction_time < aggregate.next_rx_time && begin
             aggregate.next_rx_time = reaction_time
-            aggregate.next_rx = rx.uid
+            aggregate.next_rx = first(rxs).uid
         end
     end
 end

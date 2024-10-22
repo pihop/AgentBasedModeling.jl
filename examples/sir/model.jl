@@ -103,24 +103,24 @@ end
 recovery = @interaction begin
     @channel γ_recover($Iτ), $I --> $R 
     @connections ($Iτ, $I, $τ) ($IAge, $I, $Age)
-    @sampler ConstantRate()
+    @sampler GillespieMethod()
     @transition (($Age => $IAge, ), )
     @savesubstrates ($I, $τ)
 end
 
 s_death = @interaction begin
     @channel $μ, $S --> 0 
-    @sampler ConstantRate()
+    @sampler GillespieMethod()
 end
 
 i_death = @interaction begin
     @channel $μ, $I --> 0 
-    @sampler ConstantRate()
+    @sampler GillespieMethod()
 end
 
 r_death = @interaction begin
     @channel $μ, $R --> 0 
-    @sampler ConstantRate()
+    @sampler GillespieMethod()
 end
 
 # Put them together.
