@@ -88,7 +88,7 @@ simulation_params = SimulationParameters(
     Δt, 
     Rodas5(); 
     snapshot=[PopulationSnapshot(C),], 
-    maxpop=20000)
+    maxpop=10000)
 
 res = simulate(population_model, init_pop, simulation_params; remember_all_agents=true)
 
@@ -134,7 +134,7 @@ barplot!(ax_protein, collect(midpoints(proteinsnap.edges[1])), proteinsnap.weigh
 
 # Comparison with analytical computations.
 include("analyticals.jl")
-lines!(ax_size, range(span_[1], stop=span_[2], length=N_), psi_tree_.(range(span_[1], stop=span_[2], length=N_)); color=colors[10], label="Analytical solution")
+lines!(ax_size, range(span_[1], stop=span_[2], length=N), psi_tree_.(range(span_[1], stop=span_[2], length=N)); color=colors[10], label="Analytical solution")
 lines!(ax_protein, xs_, mat_s ./ mat_sx; color=colors[10], label="Analytical solution")
 
 function plot_lineage(axsize, axprotein, agent; kwargs...)

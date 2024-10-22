@@ -19,7 +19,7 @@ intparams = (
     abstol = 1e-4,
     reltol = 1e-4)
 
-γ(s, s0) = γdiv(μ_, cv_, s, s0)
+γ(s, s0) = (1 / (α_ * s)) * γdiv(μ_, cv_, s, s0, α_)
 γint(s, s0) = IntegralProblem((u,p) -> γ(u, s0), (s0, s))
 phi(s, s0) = γ(s, s0) * exp(-solve(γint(s, s0), QuadGKJL(); intparams...).u)
 
