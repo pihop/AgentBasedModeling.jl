@@ -351,7 +351,7 @@ function make_hybrid(trait, init, tspan, ps; jumpaggregator)
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)), 
         parameters(trait))
 
-    @named odes = ODEProblem([eqs...], 
+    @named odes = ODESystem([eqs...], 
         ModelingToolkit.get_iv(trait), unknowns(trait), parameters(trait);)
     jsys = convert(JumpSystem, complete(rn))
 
