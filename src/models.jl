@@ -421,8 +421,11 @@ getsim(agent::AgentState, t::Float64) = agent.simulation(t)
 
 function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
     pair[1] && return last(agent.consts[pair[2]])
-    return @inbounds agent.simulation_interp(t)[pair[2]]
-#   return @inbounds agent.simulation(t)[pair[2]]
+#    return @inbounds agent.simulation_interp(t)[pair[2]]
+#    display(t)
+#    display(agent.simulation_interp)
+#    display(agent.simulation_interp(t))
+    return agent.simulation(t)[pair[2]]
 end
 
 function Base.show(io::IO, agent::AgentState)

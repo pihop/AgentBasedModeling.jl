@@ -145,33 +145,29 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,N1,cType
     end
 end
 
-#function sample_(aggregate::PopulationItxAggregator{DirectSampler,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan, method::FirstReactionMethod; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
-#    rxs = values(aggregate.rxs)
-#
-#    aggregate.next_rx_time = Inf #tspan[end] 
-#    aggregate.next_rx = 0
-#    isempty(rxs) && return nothing
-#      
-#    pop_ = state.pop_state
-#    pvec_ = first(rxs).pitx.pvec
-#    pmod_ = first(rxs).pitx.pmod
-#    subsrules_ = first(rxs).pitx.subsrules
-#
-#    aggregate.next_rx_time = min(tspan[1] + first(rxs).pitx.Lf(pop_, pvec_, tspan[1]), tspan[end])
-#
-#    for rx in rxs 
-#        ratemax = rx.pitx.ratefmax
-#        Lf = rx.pitx.Lf
-#
-#        substrates = rx.substrates
-#        reaction_time = sample_first_arrival(
-#            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=Lf)
-#        reaction_time <= aggregate.next_rx_time && begin
-#            aggregate.next_rx = rx.uid
-#            aggregate.next_rx_time = reaction_time 
-#        end
-#    end
-#end
+function sample_(aggregate::PopulationItxAggregator{DirectSamplerMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
+    rxs = values(aggregate.rxs)
+
+    aggregate.next_rx = 0
+    aggregate.next_rx_time = Inf 
+    isempty(rxs) && return nothing
+      
+    pop_ = state.pop_state
+    pvec_ = first(rxs).pitx.pvec
+    pmod_ = first(rxs).pitx.pmod
+    subsrules_ = first(rxs).pitx.subsrules
+    ratemax = first(rxs).pitx.ratefmax
+ 
+    for rx in rxs 
+        substrates = rx.substrates
+        reaction_time = sample_first_arrival(
+            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=rx.pitx.Lf)
+        reaction_time < aggregate.next_rx_time && begin
+            aggregate.next_rx = rx.uid
+            aggregate.next_rx_time = reaction_time 
+        end
+    end
+end
 
 function sample_aggregates!(srxs::Dict{PopulationItx, PopulationItxAggregator}, state, model, params, tspan; recompute)
     for srx in srxs

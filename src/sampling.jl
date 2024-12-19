@@ -78,30 +78,26 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
     end
 end
 
-#struct DirectSampler
+struct DirectSamplerMethod
 #    L::Num
 #    
-#    function DirectSampler(L)
+#    function DirectSamplerMethod(L)
 #        new(L)
 #    end
-#end
-#
-#get_λmax(s::DirectSampler) = 0.0 
-#get_L(s::DirectSampler) = s.L
-#
-#function process_interaction!(inter::PopulationItx{TransitionDef{DirectSampler}}, rn)
-#    inter.rx.method.propf = _gen_rate_function(inter.rx.method.prop_sym, rn)
-#    inter.rx.method.lfn = _gen_rate_function(inter.rx.method.lfn_sym, rn)
-#end
-#
-#@inline function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::DirectSampler, model; ratemax, Lf)
-#    proposet = tspan[1]
-#    last_prop = tspan[1]
-#    pstate!(pmod, pvec, subsrules, model, subs, state, last_prop)
-#    proposet += ratef(state.pop_state, pvec, last_prop)
-#    return proposet
-#end
-#
+end
+
+Base.show(io::IO, sampler::DirectSamplerMethod) = print(io, "First reaction method")
+
+get_λmax(s::DirectSamplerMethod) = 0.0 
+get_L(s::DirectSamplerMethod) = Inf 
+
+function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::DirectSamplerMethod, model; ratemax, Lf)
+    proposet = tspan[1]
+    pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
+    proposet += ratef(state.pop_state, pvec, proposet)
+    return proposet
+end
+
 #mutable struct DirectSampler
 #    propf::Function
 #    prop_sym::Num
