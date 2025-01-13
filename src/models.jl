@@ -289,7 +289,7 @@ function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwarg
     Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
 end
 
-function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics, N}, tspan, ps; jumpaggregator) where {T,N}
+function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics, N}, tspan, ps; jumpaggregator) where {N}
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
