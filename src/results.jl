@@ -107,7 +107,8 @@ function build_snapshot_solution(snapshot; names)
     us = [[s...] for s in snaps] 
     T = eltype(eltype(us))
     N = length((size(us[1])..., length(us)))
-    interp = Interpolations.linear_interpolation(t, us)  
+    Interpolations.deduplicate_knots!(t)
+    interp = Interpolations.linear_interpolation(t, us; extrapolation_bc=Flat())  
     retcode = ReturnCode.Success
     return SnapshotSolution{T,N}(names, us, t, interp, retcode)
 end
