@@ -6,6 +6,7 @@ using StatsBase
 using Base.Threads
 using ProgressMeter
 using CairoMakie
+using DataFrames
 
 include("model.jl")
 
@@ -63,13 +64,13 @@ function simulate_bulk(ntraj, params; model)
     sum = EnsembleSummary(sol, 0:1.0:1000)
 
     mu = params_[αendorm]
-    CSV.write("trajectory_$(mu)_$(maxN).csv", DataFrame(t=esumdict[mu].u.t, u1=getindex.(esumdict[mu].u.u, 1), u2=getindex.(esumdict[mu].u.u, 2)))
+    CSV.write("trajectory_$(mu)_$(maxN).csv", DataFrame(t=collect(sum.u.t), u1=getindex.(sum.u.u, 1), u2=getindex.(sum.u.u, 2)))
 end
 
 for mu in mus 
-    simulate_bulk(5000, fixed_params[mu]; model=population_model)   
+    simulate_bulk(10, fixed_params[mu]; model=population_model)   
 end
 
-resdict = Dict(mu => simulate_bulk(5000, fixed_params[mu]; model=population_model) for mu in mus)
-esumdict = Dict(mu => EnsembleSummary(resdict[mu], 0:1.0:1000) for mu in mus)
+#resdict = Dict(mu => simulate_bulk(5000, fixed_params[mu]; model=population_model) for mu in mus)
+#esumdict = Dict(mu => EnsembleSummary(resdict[mu], 0:1.0:1000) for mu in mus)
 
