@@ -68,7 +68,7 @@ function simulate_bulk(ntraj, params; model)
 end
 
 for mu in mus 
-    simulate_bulk(10, fixed_params[mu]; model=population_model)   
+    simulate_bulk(5000, fixed_params[mu]; model=population_model)   
 end
 
 #resdict = Dict(mu => simulate_bulk(5000, fixed_params[mu]; model=population_model) for mu in mus)
