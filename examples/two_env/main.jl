@@ -15,7 +15,7 @@ using Base.Threads
 using ProgressMeter
 
 # Defines the variables for population counts C and ages τ.
-@variables t 
+@independent_variables t 
 @species C(t) τ(t)
 # Defines the parameters that are going to be used. Cτ is the only funny one --
 # we're going to use it as link between the trait and division dynamics layers.
@@ -56,8 +56,17 @@ function birth_bound(α, β, age, L)
     return aB + 1e-8
 end
 
+function death_time(T1, T2, α, age, time)
+    T = T1 + T2
+    sample = max(0.0, α - age)
+    
+    mod(time + sample, T) < T1 && return sample
+    return Inf
+end
+
 @register_symbolic gammahaz(α,β,x) 
 @register_symbolic death_rate(Ton, Toff, α, β, age, time) 
+@register_symbolic death_time(Ton, Toff, α, age, time) 
 @register_symbolic death_bound(Ton, Toff, α, β, age, time, L) 
 @register_symbolic birth_bound(α, β, age, L) 
 
@@ -72,7 +81,7 @@ Cell = AgentDynamics([CellAge,], ())
 # how traits are initialised after population interactions.
 # sampler, a bound function for the hazard is given symbolically.
 
-cell_division = @population_itx begin
+cell_division = @interaction begin
     @channel gammahaz($αdiv, $βdiv, $Cτ), $C --> 2*$C
     @sampler FirstReactionMethod($birth_bound($αdiv, $βdiv, $Cτ, $L), $L)
     @connections ($Cτ, $C, $τ)
@@ -80,7 +89,7 @@ cell_division = @population_itx begin
     @savesubstrates ($C, $τ)
 end
 
-cell_death = @population_itx begin
+cell_death = @interaction begin
     @channel death_rate($Ton, $Toff, $αdeath, $βdeath, $Cτ, $t), $C --> 0
     @sampler FirstReactionMethod($death_bound($Ton, $Toff, $αdeath, $βdeath, $Cτ, $t, $L), $L)
     @connections ($Cτ, $C, $τ)
@@ -88,6 +97,14 @@ cell_death = @population_itx begin
     @savesubstrates ($C, $τ)
 end
 
+#cell_death = @interaction begin
+#    @channel death_time($Ton, $Toff, $αdeath, $Cτ, $t), $C --> 0 
+#    @sampler DirectSamplerMethod()
+#    @transition ()
+#    @connections ($Cτ, $C, $τ)
+#    @savesubstrates ($C, $τ)
+#end
+#
 
 # Put them together.
 rxs = [cell_death, cell_division]
@@ -104,18 +121,19 @@ fixed_params = Dict(
     αdiv => 1.8, βdiv => 1.0, 
     αdeath => 2.0, βdeath => 1e-3)
 
-vary_T_1 = exp.(range(-2.0, stop=-0.8, length=10))
-vary_T_2 = exp.(range(-0.85, stop=1.7, length=10)) 
+vary_T_1 = exp.(range(-2.0, stop=-0.8, length=5))
+vary_T_2 = exp.(range(-0.85, stop=1.7, length=5)) 
 vary_T = vcat(vary_T_1, vary_T_2)
 
 tspan = (0.0, 100.0)
 maxN = 101
-replN = 20000
+replN = 5000
 # Trajectory saving timestep.
 Δt = 1.0
 
-mkpath("$(datadir())/two_env/")
-filename = "$(datadir())/two_env/results.csv"
+datadir = "data"
+mkpath("$(datadir)/two_env/")
+filename = "$(datadir)/two_env/results_.csv"
 file = open(filename,"w")
 
 #For each parametrisation simulate trajectories and check whether or not the population has survived by the end of the
