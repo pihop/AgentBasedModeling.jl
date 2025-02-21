@@ -84,7 +84,8 @@ function make_reactions!(agents, state, model::PopulationModel, tspan, params; m
         end
 
         for react in reacts
-            srx = SimulationReaction(rx, react, method, model.rn)
+#            srx = SimulationReaction(rx, react, method, model.rn)
+            srx = SimulationReaction(rx, tuple([(r.sym, r.uid) for r in react]...), method, model.rn)
             for r in react
                 push!(r.srxs, (rx, srx.uid))
             end
@@ -154,13 +155,14 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
 
     products = srx.pitx.itxdef.rx.rx.products
     prodstoich = srx.pitx.itxdef.rx.rx.prodstoich
+    substrates = AgentState[get_agent(state, agent) for agent in srx.substrates]
 
     # Construct input.
      
     new_agents = vcat(fill.(products, prodstoich)...)
-    new_traits = trait_transition(srx.pitx, new_agents, srx.substrates, srx.pitx.subsrules, state, model, time)
+    new_traits = trait_transition(srx.pitx, new_agents, substrates, srx.pitx.subsrules, state, model, time)
 
-    pstate!(srx.pitx.pmod, srx.pitx.pvec, srx.pitx.subsrules, model, srx.substrates, state, time)
+    pstate!(srx.pitx.pmod, srx.pitx.pvec, srx.pitx.subsrules, model, substrates, state, time)
     varsubs = variable_subs(srx.pitx.itxdef.vars, srx.pitx.pvec, srx.pitx.psymbs)
 
     for (i, agent) in enumerate(new_agents)
@@ -171,7 +173,7 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
         
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
-            agent_ = AgentState(time, agent, (), (), [(s.sym, s.uid) for s in srx.substrates])
+            agent_ = AgentState(time, agent, (), (), [s for s in substrates])
             new[agent][agent_.uid] = agent_
             continue
         end
@@ -179,10 +181,10 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
-        agent_ = AgentState(time, agent, tr, c, [(s.sym, s.uid) for s in srx.substrates])
+        agent_ = AgentState(time, agent, tr, c, [s for s in substrates])
         new[agent][agent_.uid] = agent_
     end
-    return new, srx.substrates
+    return new, substrates
 end
 
 function push_to_pop!(pop::Dict, agents::Dict) 
@@ -219,6 +221,11 @@ function get_substrates(state, rx)
     return srx.substrates
 end
 
+function get_agent(state, agent)
+    sym, uid = agent
+    return state.pop[sym][uid]
+end
+
 function remove_agent!(state::SimulationState, agent)
     agent_ = pop!(state.pop[agent.sym], agent.uid, nothing)
     isnothing(agent_) && return nothing
@@ -242,6 +249,12 @@ function filter_rxs!(state::SimulationState, delagents)
     isempty(delagents) && return nothing
     for agent in delagents
         remove_agent!(state, agent)    
+    end
+end
+
+function update_trait_snapshot!(state::SimulationState)
+    for agent in Iterators.flatten(values.(values(state.pop))) 
+        update_trait_snapshot!(agent, state.t)
     end
 end
 
@@ -304,6 +317,7 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
         for agent in Iterators.flatten(values.(values(state.pop)))
             if save isa TraitSnapshot 
                 isa(model.traitdefs[agent.sym].dynamics, EmptyTraitProblem) && continue
+                !isequal(agent.sym, save.agent) && continue
                 push!(snapshot, TraitValue(agent.simulation(time; idxs=save.trait)[1], time, agent.idx))
             elseif save isa PopulationSnapshot
                 isequal(agent.sym, save.agent) ? push!(snapshot_n, agent.sym) : nothing
@@ -328,7 +342,7 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
 
         c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits)...) for x in cts)
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits)...) for x in unknowns(dyn))
-      
+
         agent_ = AgentState(tspan[1], agent, tr, c, nothing)
         pop[agent][agent_.uid] = agent_ 
     end
@@ -365,6 +379,7 @@ function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationPara
 
     try 
         while true
+            update_trait_snapshot!(state)
             sample_aggregates!(state.srxs, state, model, params, (state.t, tend), recompute=recompute_bounds)
             next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
             rxidx = state.srxs[rx_channel].next_rx 

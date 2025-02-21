@@ -31,7 +31,8 @@ function compute_extrande_bounds!(aggregate, rxs, state, model, params, tspan, l
     if aggregate.sampler.trait_indep 
         # Same bound of all reactions.
         rx = first(rxs)
-        substrates = rx.substrates
+        #substrates = rx.substrates
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
         aggregate.Bmax = length(rxs) * rx.pitx.ratefmax(pop_, pvec_, tspan[1])
         aggregate.Lmin = rx.pitx.Lf(pop_, pvec_, tspan[1])
@@ -41,13 +42,13 @@ function compute_extrande_bounds!(aggregate, rxs, state, model, params, tspan, l
     aggregate.Bmax = 0.0
     aggregate.Lmin = Inf
     for rx in rxs
-        substrates = rx.substrates
-        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
+        #substrates = rx.substrates
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+        pstate!(rx.pitx.pmod, rx.pitx.pvec, subsrules_, model, substrates, state, tspan[1])
         L = rx.pitx.Lf(pop_, pvec_, tspan[1]) 
         if L < aggregate.Lmin
-            aggregate.Lmin = L          
+            aggregate.Lmin = L
         end
-#        display(rx.pitx.ratefmax)
         aggregate.Bmax += rx.pitx.ratefmax(pop_, pvec_, tspan[1])
     end
 end
@@ -56,7 +57,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
     aggregate.next_rx = 0
     rxs = values(aggregate.rxs)
     len = length(rxs)
-    aggregate.next_rx_time = Inf       
+    aggregate.next_rx_time = Inf
 
     isempty(rxs) && return nothing
 
@@ -77,7 +78,8 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
         UBmax = rand() * aggregate.Bmax
 
         for rx in rxs 
-            pstate!(pmod_, pvec_, subsrules_, model, rx.substrates, state, prop_ttnj)
+            substrates = AgentState[state.pop[sym][uid] for (sym, uid) in rx.substrates]
+            pstate!(pmod_, pvec_, subsrules_, model, substrates, state, prop_ttnj)
             cur_rate += rx.pitx.ratef(pop_, pvec_, prop_ttnj)
 
             if cur_rate ≥ UBmax
@@ -105,16 +107,17 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sTy
     subsrules_ = first(rxs).pitx.subsrules
    
     for rx in rxs 
-        substrates = first(rxs).substrates
-        ratemax = first(rxs).pitx.ratefmax
-        lookahead = first(rxs).pitx.Lf
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+#        display(substrates)
+        ratemax = rx.pitx.ratefmax
+        lookahead = rx.pitx.Lf
 
         reaction_time = sample_first_arrival(
-            first(rxs).pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
+            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=lookahead)
 
         reaction_time < aggregate.next_rx_time && begin
             aggregate.next_rx_time = reaction_time
-            aggregate.next_rx = first(rxs).uid
+            aggregate.next_rx = rx.uid
         end
     end
 end

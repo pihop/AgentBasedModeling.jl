@@ -145,7 +145,6 @@ function trait_transition(pitx, products, substrates, subsrules, state, model, t
     for (s, (idx_, type_, sym_, la_)) in subsrules
         push!(subs_, s => get_trait_value(substrates[idx_], t, la_))
     end
-#    display(subs_)
     
     isnothing(pitx.itxdef.rx.traitt.rule) && return []
 
@@ -397,6 +396,7 @@ let x = Threads.Atomic{Int}(0)
         consts::NTuple{N2, Pair{Num,Float64}}
         simulation::Union{Nothing, ODESolution, RODESolution}
         simulation_interp
+        trait_snapshot::Union{Vector{Float64}, Nothing}
 
         function AgentState(btime, sym, init_trait, consts, parents::P) where {P}
             atomic_add!(x,1)
@@ -412,6 +412,7 @@ let x = Threads.Atomic{Int}(0)
             agent.uid = hash(parents, hash(sym, hash(x.value)))
             agent.consts = consts 
             agent.simulation = nothing
+            agent.trait_snapshot = nothing
             return agent
         end
     end
@@ -419,10 +420,14 @@ end
 Base.isequal(a::AgentState, b::AgentState) = isequal(a.uid, b.uid)
 getsim(agent::AgentState, t::Float64) = agent.simulation(t)
 
+function update_trait_snapshot!(agent::AgentState, t::Float64)
+    isnothing(agent.simulation) && return nothing
+    agent.trait_snapshot = agent.simulation(t)
+end
+
 function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
     pair[1] && return last(agent.consts[pair[2]])
-    return @inbounds agent.simulation_interp(t)[pair[2]]
-#   return @inbounds agent.simulation(t)[pair[2]]
+    return @inbounds agent.trait_snapshot[pair[2]]
 end
 
 function Base.show(io::IO, agent::AgentState)
@@ -441,7 +446,8 @@ end
 
 struct SimulationReaction{mType,N1,cType,sType,F1,F2,N2,N3}
     pitx::PopulationItx{mType,N1,cType,sType,F1,F2,N2}
-    substrates::NTuple{N3, AgentState}
+#    substrates::NTuple{N3, AgentState}
+    substrates::NTuple{N3, Tuple{Num, UInt}}
     sampler::mType
     uid::UInt
 
