@@ -40,7 +40,7 @@ module AgentBasedModeling
     export population_counts, SaveSubstrateTrait, SaveProductTrait, TraitSnapshot, PopulationSnapshot
 
     include("models.jl")
-    export AgentDynamics, AgentState, PopulationModelDef, ParameterCnx, AgeConnection, Variable, TraitTransition, PopulationItx
+    export AgentDynamics, AgentState, AgentsModel, ParameterCnx, AgeConnection, Variable, TraitTransition, PopulationItx
     export TransitionDef
     export EmptyTraitProblem
     export HybridSDEDynamics

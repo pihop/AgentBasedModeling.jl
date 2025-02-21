@@ -363,7 +363,7 @@ function init_simulator(modeldef, init_pop, params)
     return state, results, model
 end
 
-function simulate(modeldef::PopulationModelDef, init_pop, params::SimulationParameters; 
+function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters; 
     showprogress=true, 
     save_interactions=false,
     remember_all_agents=false) 

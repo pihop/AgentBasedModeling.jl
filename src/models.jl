@@ -214,11 +214,11 @@ struct Trait{T}
     symtoidx::Dict{Num, Tuple{Bool, Int}} # tuple element true if constant
 end
 
-struct PopulationModelDef
+struct AgentsModel
     rn::ReactionSystem
     rxs::Vector{PopulationItxDef}
     traits::Dict{Num, AgentDynamics} 
-    function PopulationModelDef(rxs, traits)
+    function AgentsModel(rxs, traits)
         rxs_ = Union{Equation, Reaction}[] 
         bnd_ = Union{Equation, Reaction}[] 
         sps_ = []
@@ -246,7 +246,7 @@ struct PopulationModel
     traitprobs::Dict{Num, Trait}
     traitdefs::Dict{Num, AgentDynamics}
 
-    function PopulationModel(popmodeldef::PopulationModelDef, params)
+    function PopulationModel(popmodeldef::AgentsModel, params)
         trait_problems = make_trait_problems(popmodeldef, params)
         itxs = PopulationItx[process_interaction(rx, popmodeldef, params) for rx in popmodeldef.rxs]
         return new(popmodeldef.rn, itxs, trait_problems, popmodeldef.traits) 
@@ -262,7 +262,7 @@ struct Indexing{N}
     end
 end
 
-function make_trait_problems(model::PopulationModelDef, params;)
+function make_trait_problems(model::AgentsModel, params;)
     Dict{Num, Trait}(
         trait.first => make_trait_problem(trait.first, trait.second, params.tspan, params.ps; 
             jumpaggregator=params.jumpaggregator, params.solverkws...) for trait in model.traits)
