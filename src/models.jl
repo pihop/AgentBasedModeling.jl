@@ -181,15 +181,15 @@ struct AgentDynamics{D,N}
     symtoidx::Dict{Num, Tuple{Bool, Int}} 
 end
 
+function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
+    @error "Extending SDE with reaction network currently requires the following workaround: specify 
+        HybridSDEDynamics(continuous::SDESystem, discrete::ReactionSystem) as the agent dynamics and construct
+        the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
+end
+
 function AgentDynamics(dynamics::Union{Vector,Tuple}, constants) 
     if length(dynamics) > 1
-        try  
-            dynamics_ = extend(dynamics...)
-        catch
-            @error "Extending SDE with reaction network currently requires the following workaround: specify 
-                HybridSDEDynamics(continuous::SDESystem, discrete::ReactionNetwork) as the agent dynamics and construct
-                the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
-        end
+        dynamics_ = extend(dynamics...)
     elseif length(dynamics) == 1
         dynamics_ = dynamics[1]
     end
@@ -326,7 +326,7 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
             sym, 
             JumpProblem(dynamics.dynamics, dprob, jumpaggregator), Dict(keys .=> vals))
     end
-    
+
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
     Trait(sym, prob, Dict(keys .=> vals))
 end
