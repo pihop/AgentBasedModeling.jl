@@ -23,7 +23,7 @@ function build_aggregate(pitx::PopulationItx{mType,N1,cType,sType,F1,F2,N2}, t) 
 end
 
 function compute_extrande_bounds!(aggregate::A, 
-        rxs::R, state::S, model::M, params::P, tspan::T, len::Ltype) where {A <: PopulationItxAggregator, R, S <: SimulationState, M <: PopulationModel, P, T, Ltype <: Int}
+        rxs::R, state::S, model::M, params::P, tspan::T, len::Ltype) where {A <: PopulationItxAggregator, R, S, M, P, T, Ltype <: Int}
     rx_ = first(rxs)
     pop_ = state.pop_state
     pvec_ = first(rxs).pitx.pvec
