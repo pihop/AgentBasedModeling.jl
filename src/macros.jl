@@ -1,5 +1,35 @@
 const ExprValues = Union{Expr, Symbol, Float64, Int}
 
+# Redfine @species macro from Catalyst with a more appropriate name. 
+macro abm_variables(ex...)
+    vars = Symbolics._parse_vars(:variables, Real, ex)
+
+    # vector of symbols that get defined
+    lastarg = vars.args[end]
+
+    # start adding metadata statements where the vector of symbols was previously declared
+    idx = length(vars.args)
+    resize!(vars.args, idx + length(lastarg.args) + 1)
+    for sym in lastarg.args
+        vars.args[idx] = :($sym = ModelingToolkit.wrap(setmetadata(
+            ModelingToolkit.value($sym), Catalyst.VariableSpecies, true)))
+        idx += 1
+    end
+
+    # check nothing was declared isconstantspecies
+    ex = quote
+        all(!Catalyst.isconstant ∘ ModelingToolkit.value, $lastarg) ||
+            throw(ArgumentError("isconstantspecies metadata can only be used with parameters."))
+    end
+    vars.args[idx] = ex
+    idx += 1
+
+    # put back the vector of the new species symbols
+    vars.args[idx] = lastarg
+
+    esc(vars)
+end
+
 function process_cnx!(exps, cnxs, pexprs)
     for exp in reverse(exps)  
         exp == nothing && return nothing
