@@ -155,7 +155,7 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
 
     products = srx.pitx.itxdef.rx.rx.products
     prodstoich = srx.pitx.itxdef.rx.rx.prodstoich
-    substrates = AgentState[get_agent(state, agent) for agent in srx.substrates]
+    substrates = tuple(AgentState[get_agent(state, agent) for agent in srx.substrates]...)
 
     # Construct input.
      
