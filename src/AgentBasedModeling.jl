@@ -56,5 +56,5 @@ module AgentBasedModeling
 
     include("macros.jl")
     export @interaction
-
+    export @abm_variables
 end
