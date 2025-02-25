@@ -104,7 +104,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
     pmod = Tuple{Num, Int, Tuple{Int, Num, Num, Tuple{Bool, Int64}}}[]
 
     for (i,p) in enumerate(ps)
-        if (p isa Float64) 
+        if (p isa Real) 
             pvec[i] = p
             continue
         elseif haskey(subsrules_, p)
