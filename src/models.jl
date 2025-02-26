@@ -234,7 +234,7 @@ struct AgentsModel
         @named rn = ReactionSystem(
             rxs_, 
             Catalyst.get_iv(rn_), 
-            setdiff(union(Catalyst.get_species(rn_), sps_), [Catalyst.get_iv(rn_),]), 
+            setdiff(union(Catalyst.get_species(rn_), sps_, collect(keys(traits))), [Catalyst.get_iv(rn_),]), 
             setdiff(union(Catalyst.parameters(rn_), params_), [Catalyst.get_iv(rn_), Catalyst.get_species(rn_)...]))
         return new(rn, rxs, traits)
     end
