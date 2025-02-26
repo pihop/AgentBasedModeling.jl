@@ -52,7 +52,7 @@ end
 ```
 Combine the agent dynamics and interactions into a model.
 ```julia
-cell_population_model = PopulationModelDef([divide,], Dict(C => Cell, ))
+cell_population_model = AgentsModel([divide,], Dict(C => Cell, ))
 ```
 Give some initial values and specify the model parameters. Population is initialised with a single cell with age 0 and size 0.1.
 ```julia
