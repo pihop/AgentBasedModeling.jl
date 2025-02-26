@@ -119,13 +119,10 @@ function lineage(res, cell)
     lin = [] 
     cell_ = cell.parents[1]
     while true 
-        try 
-            savecell_ = res.agents[cell_[1]][cell_[2]]
-            push!(lin, savecell_)
-            cell_ = savecell_.parents[1]
-        catch
-            break
-        end
+        savecell_ = res.agents[cell_.sym][cell_.uid]
+        push!(lin, savecell_)
+        isnothing(savecell_.parents) && return reverse(lin)
+        cell_ = savecell_.parents[1]
     end
     return reverse(lin)
 end
