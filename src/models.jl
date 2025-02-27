@@ -109,7 +109,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
             pvec[i] = 0.0
         end
     end
-    
+
     return PopulationItx{
         mType,N,cType,sType,typeof(ratef),typeof(ratefmax),typeof(Lf),length(pmod)}(
             itxdef, 

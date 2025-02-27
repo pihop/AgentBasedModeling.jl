@@ -56,12 +56,12 @@ function substitute_agent(subs, agents, pop, model)
 
     subs[idx] = values(agents[subs[idx]])
     idxs_ = Iterators.flatten((max(1, idx-1):idx-1, idx+1:length(subs)))
-       
     for idx_ in idxs_
         subs[idx_] = values(pop[subs[idx_]])
     end
-      
-    return Iterators.product(subs...)
+
+    # Make sure combinations with duplicate agents are removed.
+    return Iterators.filter(allunique, Iterators.product(subs...))
 end
 
 function make_reactions!(agents, state, model::PopulationModel, tspan, params; make_zero_substrate_rx=true)
@@ -177,7 +177,6 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
             new[agent][agent_.uid] = agent_
             continue
         end
-
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
