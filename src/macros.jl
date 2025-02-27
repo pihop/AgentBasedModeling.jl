@@ -36,6 +36,9 @@ function process_cnx!(exps, cnxs, pexprs)
         
         for (i, vec) in enumerate(exp.args)
             push!(cnxs.args, :(ParameterCnx($(vec), $(i))))
+            for arg in vec.args
+                push!(pexprs.args, arg.args[2])
+            end
         end
     end
 end
