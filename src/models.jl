@@ -1,14 +1,13 @@
 abstract type AbstractParameterCnx end
 
-struct ParameterCnx <: AbstractParameterCnx
-    parameter::Num
-    type::Num 
-    trait::Union{Num, Symbol}
+struct ParameterCnx{pType, iType} <: AbstractParameterCnx
+    parameter::pType
+    idx::iType
 end
 
-struct Variable{T,F} <: AbstractParameterCnx
-    parameter::T
-    symbf::F
+struct Variable{pType,fType} <: AbstractParameterCnx
+    parameter::pType
+    symbf::fType
 end
 
 function variable_subs(vars, pstate, symbs)
@@ -19,11 +18,6 @@ end
 function replace_with_connection(exprs, cnx)
     replacements = Dict(c.trait => c.parameter for c in cnx)
     return [substitute(e, replacements) for e in Num.(exprs)]
-end
-
-struct AgeConnection <: AbstractParameterCnx
-    parameter::Num
-    type::Num
 end
 
 struct TraitTransition{R}
@@ -71,8 +65,8 @@ struct PopulationItx{mType,N,cType,sType,F1,F2,F3,N2}
     uid::UInt
     psymbs::Vector{Num}
     pvec::Vector{Float64}
-    pmod::NTuple{N2,Tuple{Num, Int, Tuple{Int, Num, Num, Tuple{Bool, Int64}}}}
-    subsrules::Dict{Num, Tuple{Int, Num, Num, Tuple{Bool, Int64}}}
+    pmod::NTuple{N2,Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}}
+    subsrules::Dict{Num, Tuple{Int, Num, Tuple{Bool, Int64}}}
 end
 
 function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, model, params) where {nType,mType,N,cType,sType}
@@ -88,11 +82,13 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
         ispopdep = true
     end
 
-    subsrules_ = Dict{Num, Tuple{Int, Num, Num, Tuple{Bool, Int64}}}()
+    subsrules_ = Dict{Num, Tuple{Int, Num, Tuple{Bool, Int64}}}()
     for cx in itxdef.cnx
-        idx_ = findall(x -> isequal(x, cx.type), itxdef.rx.rx.substrates)
-        length(idx_) > 1 && throw("Substitution not uniquely defined") 
-        subsrules_[cx.parameter] = (idx_[1], cx.type, cx.trait, model.traits[cx.type].symtoidx[cx.trait])
+        subs = reduce(vcat, fill.(itxdef.rx.rx.substrates, itxdef.rx.rx.substoich))
+        type = subs[cx.idx]
+        for (param, trait) in cx.parameter
+            subsrules_[param] = (cx.idx, trait, model.traits[type].symtoidx[trait])
+        end
     end
 
     psymb = union(parameters(modelrn), itxdef.params...)
@@ -101,7 +97,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
     ps = Symbolics.unwrap.(ps)
 
     pvec = Vector{Float64}(undef, length(ps))
-    pmod = Tuple{Num, Int, Tuple{Int, Num, Num, Tuple{Bool, Int64}}}[]
+    pmod = Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}[]
 
     for (i,p) in enumerate(ps)
         if (p isa Real) 
@@ -142,7 +138,7 @@ end
 function trait_transition(pitx, products, substrates, subsrules, state, model, t::Float64)
     subs_ = Pair{Num, Float64}[]
     out_ = []
-    for (s, (idx_, type_, sym_, la_)) in subsrules
+    for (s, (idx_, sym_, la_)) in subsrules
         push!(subs_, s => get_trait_value(substrates[idx_], t, la_))
     end
     
@@ -156,7 +152,7 @@ end
 
 function pstate!(pmod, pvec, subsrules, model, substrates, state, t::Float64)
     isempty(pmod) && return nothing 
-    for (p, i, (idx_, type_, sym_, la_)) in pmod
+    for (p, i, (idx_, sym_, la_)) in pmod
         @inbounds pvec[i] = get_trait_value(substrates[idx_], t, la_)
     end
 end

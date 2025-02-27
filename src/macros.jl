@@ -33,8 +33,10 @@ end
 function process_cnx!(exps, cnxs, pexprs)
     for exp in reverse(exps)  
         exp == nothing && return nothing
-        push!(cnxs.args, :(ParameterCnx($(exp)...)))
-        push!(pexprs.args, exp.args[1])
+        
+        for (i, vec) in enumerate(exp.args)
+            push!(cnxs.args, :(ParameterCnx($(vec), $(i))))
+        end
     end
 end
 

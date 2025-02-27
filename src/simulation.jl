@@ -158,7 +158,7 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
     substrates = tuple(AgentState[get_agent(state, agent) for agent in srx.substrates]...)
 
     # Construct input.
-     
+
     new_agents = vcat(fill.(products, prodstoich)...)
     new_traits = trait_transition(srx.pitx, new_agents, substrates, srx.pitx.subsrules, state, model, time)
 
@@ -167,10 +167,10 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
 
     for (i, agent) in enumerate(new_agents)
         dyn = model.traitdefs[agent].dynamics
-        cts = model.traitdefs[agent].constants      
+        cts = model.traitdefs[agent].constants
 
         !in(agent, keys(new)) && begin new[agent] = Dict{idType, AgentState}() end
-        
+
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
             agent_ = AgentState(time, agent, (), (), [s for s in substrates])
