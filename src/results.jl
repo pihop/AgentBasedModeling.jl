@@ -1,8 +1,8 @@
 abstract type AbstractSaveTrait end
 
 mutable struct SimulationResults
-    subs::Dict
-    prods::Dict
+    instates::Dict
+    outstates::Dict
     snapshot::Dict
     agents
     final_pop
@@ -10,23 +10,11 @@ mutable struct SimulationResults
     tend
 
     function SimulationResults(model; snapshot)
-        subs = Dict()
-        prods = Dict()
+        ins = Dict()
+        outs = Dict()
         sshot = Dict()
-        for rx in model.rxs
-            for save in rx.saving
-                if save isa SaveSubstrateTrait
-                    subs[save_trait_name(save)] = []
-                elseif save isa SaveProductTrait
-                    prods[save_trait_name(save)] = []
-                end
-            end
-        end
-        for save in snapshot
-            sshot[save_trait_name(save)] = Snapshot[]
-        end
 
-        return new(subs, prods, sshot, nothing, nothing, [])
+        return new(ins, outs, sshot, nothing, nothing, [])
     end
 end
 
@@ -35,12 +23,12 @@ function Base.show(io::IO, ::MIME"text/plain", results::SimulationResults)
 end
 
 
-struct SaveSubstrateTrait <: AbstractSaveTrait
+struct SaveInStateTrait <: AbstractSaveTrait
     agent
     trait
 end
 
-struct SaveProductTrait <: AbstractSaveTrait
+struct SaveOutStateTrait <: AbstractSaveTrait
     agent
     trait
 end

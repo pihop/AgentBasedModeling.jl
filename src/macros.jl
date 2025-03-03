@@ -33,7 +33,7 @@ end
 function process_cnx!(exps, cnxs, pexprs)
     for exp in reverse(exps)  
         exp == nothing && return nothing
-        
+
         for (i, vec) in enumerate(exp.args)
             push!(cnxs.args, :(ParameterCnx($(vec), $(i))))
             for arg in vec.args
@@ -43,17 +43,17 @@ function process_cnx!(exps, cnxs, pexprs)
     end
 end
 
-function process_savesubs!(exps, save)
+function process_instate!(exps, save)
     for exp in reverse(exps)
         exp == nothing && return nothing
-        push!(save.args, :(SaveSubstrateTrait($(exp)...)))
+        push!(save.args, :(SaveInStateTrait($(exp)...)))
     end
 end
 
-function process_saveprods!(exps, save)
+function process_outstate!(exps, save)
     for exp in reverse(exps)
         exp == nothing && return nothing
-        push!(save.args, :(SaveProductTrait($(exp)...)))
+        push!(save.args, :(SaveOutStateTrait($(exp)...)))
     end
 end
 
@@ -129,12 +129,12 @@ function process_population_itx(ex)
             process_cnx!(line.args, cnxs, pexprs)
             lines_dict[:connections] = line
         end
-        line.args[1] == Symbol("@savesubstrates") && begin 
-            process_savesubs!(line.args, save)
+        line.args[1] == Symbol("@saveinstate") && begin 
+            process_instate!(line.args, save)
             lines_dict[:savesubstrates] = line
         end
-        line.args[1] == Symbol("@saveproducts") && begin 
-            process_saveprods!(line.args, save)
+        line.args[1] == Symbol("@saveoutstate") && begin 
+            process_outstate!(line.args, save)
             lines_dict[:saveproducts] = line
         end
         line.args[1] == Symbol("@name") && begin 

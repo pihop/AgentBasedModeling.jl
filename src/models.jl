@@ -40,44 +40,43 @@ Catalyst.unknowns(::EmptyTraitProblem) = ()
 TraitProblems = Union{JumpProblem, ODEProblem, EmptyTraitProblem}
 CommonSolve.solve(prob::EmptyTraitProblem, args...; kwargs...) = nothing
 
-struct PopulationItxDef{nType,mType,N,M,cType,sType} 
+struct PopulationItxDef{nType,rxType,sType,pType,cType,vType,svType} 
     name::nType
-    rx::TransitionDef
-    species::NTuple{N,Num}
-    params::NTuple{M,Num}
+    rx::rxType
+    species::sType
+    params::pType
     cnx::cType
-    vars::Vector{Variable}
-    saving::sType
+    vars::vType
+    saving::svType
 
-    function PopulationItxDef(rx, species, ps, cnx, vars; saving=[], name) #where {C<:AbstractParameterCnx}
-        return new{typeof(name), typeof(rx.method),length(species), length(ps), typeof(cnx),typeof(saving)}(
-            name, rx, tuple(species...), tuple(ps...), cnx, vars, saving)
+    function PopulationItxDef(rx::rxType, species::sType, ps::pType, cnx::cType, vars::vType; saving::svType=[], name::nType) where {rxType,sType,pType,cType,vType,svType,nType}
+        return new{nType,rxType,sType,pType,cType,vType,svType}(name, rx, species, ps, cnx, vars, saving)
     end
 end
 Base.hash(pitxd::PopulationItxDef) = hash(pitxd.rx)
 
-struct PopulationItx{mType,N,cType,sType,F1,F2,F3,N2} 
-    itxdef::PopulationItxDef
+struct PopulationItx{iType, F1, F2, F3, psType, pvType, pmType, srType}
+    itxdef::iType
     ratef::F1
     ratefmax::F2
     Lf::F3
     ispopdep::Bool
     uid::UInt
-    psymbs::Vector{Num}
-    pvec::Vector{Float64}
-    pmod::NTuple{N2,Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}}
-    subsrules::Dict{Num, Tuple{Int, Num, Tuple{Bool, Int64}}}
+    psymbs::psType
+    pvec::pvType
+    pmod::pmType
+    subsrules::srType
 end
 
-function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, model, params) where {nType,mType,N,cType,sType}
+function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,vType,svType}, model, params) where {nType,rxType,sType,pType,cType,vType,svType}
     modelrn = deepcopy(model.rn)
     ratef = _gen_rate_function(deepcopy(itxdef.rx.rx.rate), modelrn)
     ratefmax = _gen_rate_function(get_λmax(deepcopy(itxdef.rx.method)), modelrn)
-    
+
     Lf = _gen_rate_function(get_L(deepcopy(itxdef.rx.method)), modelrn)
 
     ispopdep = false
-    
+
     if !isempty(union(ModelingToolkit.get_variables(itxdef.rx.rx.rate), unknowns(modelrn)))
         ispopdep = true
     end
@@ -110,8 +109,9 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
         end
     end
 
+    pitxdeftype = PopulationItxDef{nType,rxType,sType,pType,cType,vType,svType}
     return PopulationItx{
-        mType,N,cType,sType,typeof(ratef),typeof(ratefmax),typeof(Lf),length(pmod)}(
+        pitxdeftype,typeof(ratef),typeof(ratefmax),typeof(Lf),typeof(psymb),typeof(pvec),typeof(pmod),typeof(subsrules_)}(
             itxdef, 
             ratef, 
             ratefmax, 
@@ -120,7 +120,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,mType,N,cType,sType}, mode
             hash(itxdef), 
             psymb,
             pvec,
-            tuple(pmod...),
+            pmod,
             subsrules_)
 end
 
@@ -135,17 +135,19 @@ function Base.show(io::IO, itx::PopulationItx{M,F}) where {M,F}
     print(io, "PopulationItx $(itx.itxdef.rx.rx).")
 end
 
-function trait_transition(pitx, products, substrates, subsrules, state, model, t::Float64)
+function trait_transition(pitx::itxType, products::pType, substrates::sType, subsrules::srType, state::stType, model::mType, t::Float64) where {itxType, pType, sType, srType, stType, mType}
     subs_ = Pair{Num, Float64}[]
-    out_ = []
+    out_ = Vector{Pair{Num, Num}}[]
     for (s, (idx_, sym_, la_)) in subsrules
         push!(subs_, s => get_trait_value(substrates[idx_], t, la_))
     end
     
-    isnothing(pitx.itxdef.rx.traitt.rule) && return []
+    isnothing(pitx.itxdef.rx.traitt.rule) && return tuple()
+
+    subs_dict = Dict{Num, Float64}(subs_)
 
     for rr in pitx.itxdef.rx.traitt.rule
-        push!(out_, first.(rr) .=> Symbolics.substitute.(last.(rr), Ref(Dict(subs_...))))
+        push!(out_, [first.(rr)...] .=> Symbolics.substitute.(last.(rr), Ref(subs_dict)))
     end
     return out_
 end
@@ -157,9 +159,9 @@ function pstate!(pmod, pvec, subsrules, model, substrates, state, t::Float64)
     end
 end
 
-struct HybridSDEDynamics
-    continuous
-    discrete
+struct HybridSDEDynamics{cType, dType}
+    continuous::cType
+    discrete::dType
 end
 
 function ModelingToolkit.unknowns(hybrid::HybridSDEDynamics)
@@ -210,11 +212,11 @@ struct Trait{T}
     symtoidx::Dict{Num, Tuple{Bool, Int}} # tuple element true if constant
 end
 
-struct AgentsModel
-    rn::ReactionSystem
-    rxs::Vector{PopulationItxDef}
-    traits::Dict{Num, AgentDynamics} 
-    function AgentsModel(rxs, traits)
+struct AgentsModel{rnType, rxType, trType}
+    rn::rnType
+    rxs::rxType
+    traits::trType
+    function AgentsModel(rxs::rxType, traits::trType) where {rxType,trType}
         rxs_ = Union{Equation, Reaction}[] 
         bnd_ = Union{Equation, Reaction}[] 
         sps_ = []
@@ -232,20 +234,21 @@ struct AgentsModel
             Catalyst.get_iv(rn_), 
             setdiff(union(Catalyst.get_species(rn_), sps_, collect(keys(traits))), [Catalyst.get_iv(rn_),]), 
             setdiff(union(Catalyst.parameters(rn_), params_), [Catalyst.get_iv(rn_), Catalyst.get_species(rn_)...]))
-        return new(rn, rxs, traits)
+        return new{typeof(rn),rxType,trType}(rn, rxs, traits)
     end
 end
 
-struct PopulationModel
-    rn::ReactionSystem
-    rxs::Vector{PopulationItx}
-    traitprobs::Dict{Num, Trait}
-    traitdefs::Dict{Num, AgentDynamics}
+struct PopulationModel{rnType,rxType,tpType,tdType}
+    rn::rnType
+    rxs::rxType
+    traitprobs::tpType
+    traitdefs::tdType
 
-    function PopulationModel(popmodeldef::AgentsModel, params)
+    function PopulationModel(popmodeldef::amType, params) where {amType}
         trait_problems = make_trait_problems(popmodeldef, params)
-        itxs = PopulationItx[process_interaction(rx, popmodeldef, params) for rx in popmodeldef.rxs]
-        return new(popmodeldef.rn, itxs, trait_problems, popmodeldef.traits) 
+        itxs = [process_interaction(rx, popmodeldef, params) for rx in popmodeldef.rxs]
+        return new{typeof(popmodeldef.rn),typeof(itxs),typeof(trait_problems),typeof(popmodeldef.traits)}(
+            popmodeldef.rn, itxs, trait_problems, popmodeldef.traits) 
     end
 end
 
@@ -272,13 +275,13 @@ function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwarg
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
-        push!(keys, c)             
-        push!(vals, (true, i))             
+        push!(keys, c)
+        push!(vals, (true, i))
     end
    
     for (i, c) in enumerate(unknowns(dynamics.dynamics))
-        push!(keys, c)             
-        push!(vals, (false, i))             
+        push!(keys, c)
+        push!(vals, (false, i))
     end
 
     Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
@@ -288,13 +291,13 @@ function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics, N}, 
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
-        push!(keys, c)             
-        push!(vals, (true, i))             
+        push!(keys, c)
+        push!(vals, (true, i))
     end
    
     for (i, c) in enumerate(unknowns(dynamics.dynamics))
-        push!(keys, c)             
-        push!(vals, (false, i))             
+        push!(keys, c)
+        push!(vals, (false, i))
     end
 
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
@@ -306,13 +309,13 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
-        push!(keys, c)             
-        push!(vals, (true, i))             
+        push!(keys, c)
+        push!(vals, (true, i))
     end
    
     for (i, c) in enumerate(unknowns(dynamics.dynamics))
-        push!(keys, c)             
-        push!(vals, (false, i))             
+        push!(keys, c)
+        push!(vals, (false, i))
     end
 
     isempty(setdiff(equations(dynamics.dynamics), reactions(dynamics.dynamics))) && begin 
@@ -331,8 +334,8 @@ function make_trait_problem(sym, dynamics::AgentDynamics{EmptyTraitProblem, N}, 
     keys = Num[]
     vals = Tuple{Bool, Int}[] 
     for (i, c) in enumerate(dynamics.constants)
-        push!(keys, c)             
-        push!(vals, (true, i))             
+        push!(keys, c)
+        push!(vals, (true, i))
     end
     Trait(sym, dynamics.dynamics, Dict(keys .=> vals))
 end
@@ -380,44 +383,47 @@ function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
 end
 
 let x = Threads.Atomic{Int}(0)
-    mutable struct AgentState{P,N1,N2,idType}
-        sym::Num
-        btime::Float64
-        dtime::Union{Float64, Nothing}
+    mutable struct AgentState{tType, sType, pType, inType, cType}
+        sym::sType
+        btime::tType
+        dtime::Union{tType, Nothing}
         idx::Int64
-        parents::P
-        srxs::Vector{Tuple{PopulationItx, UInt}}
-        uid::idType#UInt
-        init_trait::NTuple{N1, Pair{Num,Float64}}
-        consts::NTuple{N2, Pair{Num,Float64}}
+        parents::pType
+        srxs::Vector{Any}
+        uid::UInt
+        init_trait::inType
+        consts::cType
         simulation::Union{Nothing, ODESolution, RODESolution}
-        simulation_interp
+#        simulation_interp
         trait_snapshot::Union{Vector{Float64}, Nothing}
 
-        function AgentState(btime, sym, init_trait, consts, parents::P) where {P}
+        function AgentState(btime::tType, sym::sType, init_trait::inType, consts::cType, parents::pType) where {tType, sType, inType, cType, pType}
             atomic_add!(x,1)
-#            uid = uuid4()
-            agent = new{P,length(init_trait),length(consts),idType}()
-            agent.btime = btime
-            agent.sym = sym
-            agent.idx = x.value
-            agent.init_trait = init_trait
-            agent.parents = parents
-            agent.srxs = Vector{Tuple{PopulationItx, idType}}()
-#            agent.uid = uid#hash(parents, hash(sym, hash(x.value)))
-            agent.uid = hash(parents, hash(sym, hash(x.value)))
-            agent.consts = consts 
-            agent.simulation = nothing
-            agent.trait_snapshot = nothing
-            return agent
+
+            new{tType, sType, pType, inType, cType}(
+                sym,
+                btime,
+                nothing,
+                x.value,
+                parents,
+                Vector{Tuple{UInt, UInt}}(),
+#                Vector{Any}(),
+                hash(sym, hash(x.value)),
+                init_trait,
+                consts,
+                nothing,
+                nothing)
         end
     end
 end
+
 Base.isequal(a::AgentState, b::AgentState) = isequal(a.uid, b.uid)
 getsim(agent::AgentState, t::Float64) = agent.simulation(t)
+@inline getsymid(agent::AgentState)::Tuple{Num, UInt} = (agent.sym, agent.uid) 
 
 function update_trait_snapshot!(agent::AgentState, t::Float64)
     isnothing(agent.simulation) && return nothing
+    display(t)
     agent.trait_snapshot = agent.simulation(t)
 end
 
@@ -440,19 +446,27 @@ function update_dtime!(time, agent::AgentState)
     agent.dtime = time
 end
 
-struct SimulationReaction{mType,N1,cType,sType,F1,F2,N2,N3}
-    pitx::PopulationItx{mType,N1,cType,sType,F1,F2,N2}
+struct SimulationReaction{pType,mType,sType,uType}
+    pitx::pType
 #    substrates::NTuple{N3, AgentState}
-    substrates::NTuple{N3, Tuple{Num, UInt}}
+    substrates::sType
     sampler::mType
-    uid::UInt
-
-    function SimulationReaction(pitx::PopulationItx{mType,N1,cType,sType,F1,F2,N2}, substrates, sampler, rn) where 
-        {mType,N1,cType,sType,F1,F2,N2}
-
-        return new{mType,N1,cType,sType,F1,F2,N2,length(substrates)}(pitx, substrates, sampler, hash(substrates, pitx.uid))
-    end
+    uid::uType
 end
+
+#function SimulationReaction(pitx::pType, substrates, sampler::mType) where {pType,mType}
+function SimulationReaction(pitx::pType, substrates, sampler::mType) where {pType,mType}
+    subs = getsymid.(substrates)
+    uid = hash(substrates, pitx.uid)
+
+    for r in substrates
+        push!(r.srxs, (pitx.uid, uid))
+    end
+
+    return SimulationReaction{pType,mType,typeof(subs),typeof(uid)}(pitx, subs, sampler, uid)
+#    return srx
+end
+
 Base.isequal(srxa::SimulationReaction, srxb::SimulationReaction) = isequal(srxa.uid, srxb.uid)
 Base.hash(srxa::SimulationReaction) = srxa.uid
 

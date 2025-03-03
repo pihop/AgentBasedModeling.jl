@@ -14,6 +14,7 @@ module AgentBasedModeling
 #    using Distributions 
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
+    using RecursiveArrayTools
     using JumpProcesses
 #    using RuntimeGeneratedFunctions
     using StatsBase
@@ -24,8 +25,8 @@ module AgentBasedModeling
     using CommonSolve 
     using Interpolations
     import Interpolations: scale
-    using LinearAlgebra
-#    using InteractiveUtils
+#    using LinearAlgebra
+    using InteractiveUtils
 #    using BenchmarkTools
     using Base.Threads
     

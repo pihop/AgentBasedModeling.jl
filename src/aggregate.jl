@@ -1,7 +1,7 @@
 # Aggregate reactions of the same type.
-mutable struct PopulationItxAggregator{mType,N1,cType,sType,F1,F2,N2,S}
+mutable struct PopulationItxAggregator{mType,rxType,S}
     sampler::mType
-    rxs::Dict{UInt, SimulationReaction{mType,N1,cType,sType,F1,F2,N2}}
+    rxs::IdDict{UInt, Any}
     next_rx::UInt
     next_rx_time::S
     rate_bnd::S
@@ -9,12 +9,13 @@ mutable struct PopulationItxAggregator{mType,N1,cType,sType,F1,F2,N2,S}
     Lmin::S
 end
 
-function build_aggregate(pitx::PopulationItx{mType,N1,cType,sType,F1,F2,N2}, t) where 
-    {mType,N1,cType,sType,F1,F2,N2}
-
-    PopulationItxAggregator{mType,N1,cType,sType,F1,F2,N2,typeof(t)}(
+#PopulationItx{iType, F1, F2, F3, psType, pvType, pmType, srType}
+function build_aggregate(pitx::rxType, t) where {rxType}
+#SimulationReaction{pType,mType,subType}
+#    Tuple{sType, UInt}
+    PopulationItxAggregator{typeof(pitx.itxdef.rx.method),rxType,typeof(t)}(
         pitx.itxdef.rx.method,
-        Dict{UInt, SimulationReaction{mType,N1,cType,sType,F1,F2,N2}}(), 
+        IdDict{UInt, Any}(), 
         0, 
         typemax(typeof(t)), 
         typemax(typeof(t)), 
@@ -54,7 +55,7 @@ function compute_extrande_bounds!(aggregate::A,
     end
 end
 
-function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; recompute=true) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,rxType,S}, state, model, params, tspan; recompute=true) where {rxType,S}
     rxs = values(aggregate.rxs)
     len = length(rxs)
 
@@ -104,7 +105,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,N1,cType,sTyp
     return nothing
 end
 
-function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S}
     rxs = values(aggregate.rxs)
 
     next_rx = 0
@@ -122,18 +123,24 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,N1,cType,sTy
     ratef = first(rxs).pitx.ratef
     sampler = first(rxs).sampler
 
-    substrates = AgentState[get_agent(state, agent) for agent in first(rxs).substrates]
-    # Rates for all interactions withing a Gillespie aggretate are equal.
-    total_rate(args...) = length(rxs)*ratef(args...)
+    total_rate = 0.0
+    for rx in rxs
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+        # Each agent might have constants.
+        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
+        total_rate += ratef(pop_, pvec_, tspan[1])
+    end
 
-    reaction_time = sample_first_arrival(
-        total_rate, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, sampler, model; ratemax=nothing, Lf=nothing)
+    ttnj = tspan[1] + randexp() / total_rate
+
+#    reaction_time = sample_first_arrival(
+#        total_rate, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, sampler, model; ratemax=nothing, Lf=nothing)
 
     aggregate.next_rx = rand(rxs).uid
-    aggregate.next_rx_time = reaction_time
+    aggregate.next_rx_time = ttnj
 end
 
-function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
+function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S}
     rxs = values(aggregate.rxs)
 
     next_rx = 0
@@ -197,7 +204,7 @@ end
 #    end
 #end
 
-function sample_aggregates!(srxs::Dict{PopulationItx, PopulationItxAggregator}, state, model, params, tspan; recompute)
+function sample_aggregates!(srxs::IdDict{UInt, Any}, state, model, params, tspan; recompute)
     for srx in srxs
         sample_(last(srx), state, model, params, tspan; recompute=recompute)
     end

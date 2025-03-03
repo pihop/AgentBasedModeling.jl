@@ -1,15 +1,15 @@
 mutable struct SimulationState{N,idType}
     t::Float64
-    pop::Dict{Num, Dict{idType, AgentState}}
+    pop::Dict{Num, IdDict{idType, Any}}
     pop_state::NTuple{N, Int64}
-    srxs::Dict{PopulationItx, PopulationItxAggregator}
+    srxs::IdDict{idType, Any}
 
     function SimulationState(t, pop, rxs)
         state = new{length(pop),idType}()
         state.t = t
         state.pop = pop
-        state.srxs = Dict{PopulationItx, PopulationItxAggregator}(
-            rx => build_aggregate(rx, t) for rx in rxs)
+        state.srxs = IdDict{idType, Any}(
+            rx.uid => build_aggregate(rx, t) for rx in rxs)
         return state
     end
 end
@@ -54,17 +54,19 @@ function substitute_agent(subs, agents, pop, model)
     idx = findfirst(x -> x in keys(agents), subs)
     isnothing(idx) && return ()
 
-    subs[idx] = values(agents[subs[idx]])
+    subbed = Vector{Base.ValueIterator{IdDict{UInt64, Any}}}(undef, length(subs))
+
+    subbed[idx] = values(agents[subs[idx]])
     idxs_ = Iterators.flatten((max(1, idx-1):idx-1, idx+1:length(subs)))
     for idx_ in idxs_
-        subs[idx_] = values(pop[subs[idx_]])
+        subbed[idx_] = values(pop[subs[idx_]])
     end
 
     # Make sure combinations with duplicate agents are removed.
-    return Iterators.filter(allunique, Iterators.product(subs...))
+    return Iterators.filter(allunique, Iterators.product(subbed...))
 end
 
-function make_reactions!(agents, state, model::PopulationModel, tspan, params; make_zero_substrate_rx=true)
+function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType, params::pType; make_zero_substrate_rx=true) where {aType, sType, mType, tType, pType}
     # Construct pairs of agents that can take part in a reaction.
     # Make a dict of agents => rn_sym.
     for rx in model.rxs
@@ -74,22 +76,18 @@ function make_reactions!(agents, state, model::PopulationModel, tspan, params; m
 
         isempty(substrates) && !make_zero_substrate_rx && continue
         
-        subs::Vector{Any} = vcat(fill.(Num.(substrates), substoich)...)
+        subs = vcat(fill.(Num.(substrates), substoich)...)
         reacts = substitute_agent(subs, agents, state.pop, model)
 
         isempty(substrates) && begin 
-            srx = SimulationReaction(rx, (), method, model.rn)
-            state.srxs[rx].rxs[srx.uid] = srx 
+            srx = SimulationReaction(rx, (), method)
+            state.srxs[rx.uid].rxs[srx.uid] = srx 
             continue
         end
 
         for react in reacts
-#            srx = SimulationReaction(rx, react, method, model.rn)
-            srx = SimulationReaction(rx, tuple([(r.sym, r.uid) for r in react]...), method, model.rn)
-            for r in react
-                push!(r.srxs, (rx, srx.uid))
-            end
-            state.srxs[rx].rxs[srx.uid] = srx 
+            srx = SimulationReaction(rx, react, method)
+            state.srxs[rx.uid].rxs[srx.uid] = srx 
         end 
     end
 end
@@ -106,8 +104,8 @@ function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver; model
         problem, agent, init, (agent.btime, tspan[end]), ps, solver; model=model)
 
     agent.simulation = sim
-    Interpolations.deduplicate_knots!(agent.simulation.t)
-    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
+#    Interpolations.deduplicate_knots!(agent.simulation.t)
+#    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
 end
 
 function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, solver; model)
@@ -126,8 +124,8 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
         [agentsim.t; sim.t], 
         [agentsim.u; sim.u], 
         successful_retcode=true)
-    Interpolations.deduplicate_knots!(agent.simulation.t; move_knots = true)
-    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
+#    Interpolations.deduplicate_knots!(agent.simulation.t; move_knots = true)
+#    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
 end
 
 function simulate_traits!(pop, tstart, tend, params; model, kwargs...)
@@ -150,12 +148,12 @@ function update_pop_state!(state::SimulationState, model::PopulationModel)
     state.pop_state = population_state_vector(pop_state, model.rn) 
 end
 
-function compute_new_agents(srx, state, time, model::PopulationModel, params::SimulationParameters; kwargs...) 
-    new = Dict{Num, Dict{idType, AgentState}}()
+function compute_new_agents(srx::srxType, state::sType, time::tType, model::PopulationModel, params::SimulationParameters) where {srxType, sType, tType}
+    new = Dict{Num, IdDict{idType, Any}}()
 
     products = srx.pitx.itxdef.rx.rx.products
     prodstoich = srx.pitx.itxdef.rx.rx.prodstoich
-    substrates = tuple(AgentState[get_agent(state, agent) for agent in srx.substrates]...)
+    substrates = [get_agent(state, agent) for agent in srx.substrates]
 
     # Construct input.
 
@@ -169,18 +167,18 @@ function compute_new_agents(srx, state, time, model::PopulationModel, params::Si
         dyn = model.traitdefs[agent].dynamics
         cts = model.traitdefs[agent].constants
 
-        !in(agent, keys(new)) && begin new[agent] = Dict{idType, AgentState}() end
+        !in(agent, keys(new)) && begin new[agent] = IdDict{idType, Any}() end
 
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
-            agent_ = AgentState(time, agent, (), (), [s for s in substrates])
+            agent_ = AgentState(time, agent, (), (), substrates)
             new[agent][agent_.uid] = agent_
             continue
         end
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
-        agent_ = AgentState(time, agent, tr, c, [s for s in substrates])
+        agent_ = AgentState(time, agent, tr, c, substrates)
         new[agent][agent_.uid] = agent_
     end
     return new, substrates
@@ -188,16 +186,16 @@ end
 
 function push_to_pop!(pop::Dict, agents::Dict) 
     for ksym in keys(agents)
-        !in(ksym, keys(pop)) && begin pop[ksym] = Dict{idType, AgentState}() end
+        !in(ksym, keys(pop)) && begin pop[ksym] = IdDict{idType, Any}() end
         for kint in keys(agents[ksym])
             pop[ksym][kint] = agents[ksym][kint]
         end
     end
 end
 
-function push_to_pop!(pop::Dict, agents::Tuple) 
+function push_to_pop!(pop::Dict, agents::Vector) 
     for agent in agents
-        !in(agent.sym, keys(pop)) && begin pop[agent.sym] = Dict{idType, AgentState}() end
+        !in(agent.sym, keys(pop)) && begin pop[agent.sym] = IdDict{idType, Any}() end
         pop[agent.sym][agent.uid] = agent 
     end
 end
@@ -247,7 +245,7 @@ end
 function filter_rxs!(state::SimulationState, delagents)
     isempty(delagents) && return nothing
     for agent in delagents
-        remove_agent!(state, agent)    
+        remove_agent!(state, agent)
     end
 end
 
@@ -263,45 +261,63 @@ function update_dtime!(time, deleted, agents)
     end
 end
 
-function log_products!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
+function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
-    prod_traits = filter(x -> x isa SaveProductTrait, saving) 
-    isempty(prod_traits) && return nothing 
+    out_traits = filter(x -> x isa SaveInStateTrait, saving) 
+    isempty(saving) && return nothing 
+
+    savevalues = Dict()
 
     for agent in Iterators.flatten(values.(values(agents)))
-        for save in prod_traits 
-            name = save_trait_name(save)
-            !in(name, keys(results.prods)) && begin results.prods[agent.sym] = [] end
+        for save in out_traits 
+            name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
             idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
 
-            !isnothing(idx) && begin
-                push!(results.prods[name], 
-                    TraitValueRx(agent.init_trait[idx][1], agent.init_trait[idx][2], rxtime, agent.idx, srx.pitx.itxdef))
-                continue
+            !in(name, keys(savevalues)) && begin 
+                savevalues[name] = Float64[]
             end
+            push!(savevalues[name], agent.init_trait[idx][2])
         end
+    end
+
+    for name in keys(savevalues)
+        !in(name, keys(results.outstates)) && begin 
+            results.outstates[name] = DiffEqArray([savevalues[name], ], [rxtime, ]) 
+            continue 
+        end
+        push!(results.outstates[name].t, rxtime)
+        push!(results.outstates[name].u, savevalues[name])
     end
 end
 
-function log_substrates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
+function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
-    subs_traits = filter(x -> x isa SaveSubstrateTrait, saving) 
+    in_traits = filter(x -> x isa SaveInStateTrait, saving) 
     isempty(saving) && return nothing 
 
+    savevalues = Dict()
+
     for agent in agents
-        for save in subs_traits 
-            name = save_trait_name(save)
-            !in(name, keys(results.subs)) && begin results.subs[agent] = [] end
+        for save in in_traits 
+            name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
             idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
 
-            !isnothing(idx) && begin
-                push!(results.subs[name], 
-                    TraitValueRx(agent.init_trait[idx][1], agent.simulation(rxtime)[idx], rxtime, agent.idx, srx.pitx.itxdef))
-                continue
+            !in(name, keys(savevalues)) && begin 
+                savevalues[name] = Float64[]
             end
+            push!(savevalues[name], agent.simulation(rxtime)[idx])
         end
+    end
+
+    for name in keys(savevalues)
+        !in(name, keys(results.instates)) && begin 
+            results.instates[name] = DiffEqArray([savevalues[name], ], [rxtime, ]) 
+            continue 
+        end
+        push!(results.instates[name].t, rxtime)
+        push!(results.instates[name].u, savevalues[name])
     end
 end
 
@@ -309,7 +325,7 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
     isempty(saving) && return nothing
 
     for save in saving 
-        snapshot = TraitValue[]
+        snapshot = Float64[]
         snapshot_n = [] 
         name = save_trait_name(save) 
 
@@ -317,24 +333,34 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
             if save isa TraitSnapshot 
                 isa(model.traitdefs[agent.sym].dynamics, EmptyTraitProblem) && continue
                 !isequal(agent.sym, save.agent) && continue
-                push!(snapshot, TraitValue(agent.simulation(time; idxs=save.trait)[1], time, agent.idx))
+                push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
             elseif save isa PopulationSnapshot
                 isequal(agent.sym, save.agent) ? push!(snapshot_n, agent.sym) : nothing
             end 
         end
         
         if save isa TraitSnapshot
-            push!(results.snapshot[name], Snapshot(time, snapshot))
+            !haskey(results.snapshot, name) && begin 
+                results.snapshot[name] = DiffEqArray([snapshot, ], [time, ]) 
+                continue
+            end
+            push!(results.snapshot[name].t, time)
+            push!(results.snapshot[name].u, snapshot)
         elseif save isa PopulationSnapshot
-            push!(results.snapshot[name], Snapshot(time, length(snapshot_n)))
+            !haskey(results.snapshot, name) && begin 
+                results.snapshot[name] = DiffEqArray(Float64[length(snapshot_n), ], Float64[time, ]) 
+                continue
+            end
+            push!(results.snapshot[name].t, time)
+            push!(results.snapshot[name].u, length(snapshot_n))
         end
     end
 end
 
 function initialise_agents(model, init_pop, tspan, params::SimulationParameters; kwargs...) 
     # Make the population state dictionary.
-    pop = Dict{Num, Dict{idType, AgentState}}(
-        Num(s) => Dict{idType, AgentState}() for s in unknowns(model.rn))
+    pop = Dict{Num, IdDict{idType, Any}}(
+        Num(s) => IdDict{idType, Any}() for s in unknowns(model.rn))
     for (agent, init_traits) in init_pop 
         dyn = model.traitdefs[agent].dynamics
         cts = model.traitdefs[agent].constants
@@ -369,9 +395,11 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
 
     state, results, model = init_simulator(modeldef, init_pop, params)
     
-    progress = ProgressUnknown()
+    showprogress && begin
+        progress = ProgressUnknown()
+    end
 
-    all_agents = Dict{Num, Dict{idType, AgentState}}()
+    all_agents = Dict{Num, Dict{idType, Any}}()
     log_snapshot!(state.t, params.snapshot, state, model, results)
     tend = minimum([state.t + params.Δt, params.tspan[end]])
     recompute_bounds = true
@@ -387,9 +415,9 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
                 srx = state.srxs[rx_channel].rxs[rxidx]
                 new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
                 update_dtime!(next_rx_time, deleted_agents, state.pop)
-                
+
                 # Logging
-                log_substrates!(srx, state, next_rx_time, deleted_agents, model, results)
+                log_instates!(srx, state, next_rx_time, deleted_agents, model, results)
 
                 # Remove agents involved in the current reaction and reactions with
                 # them as substrates.
@@ -398,7 +426,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
                 # Simulate traits of the new agents to the end of the tspan.   
                 simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
 
-                log_products!(srx, state, next_rx_time, new_agents, model, results)
+                log_outstates!(srx, state, next_rx_time, new_agents, model, results)
 
                 # Add the new to the population state.
                 remember_all_agents && push_to_pop!(all_agents, deleted_agents)
