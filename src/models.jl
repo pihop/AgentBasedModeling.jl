@@ -423,7 +423,6 @@ getsim(agent::AgentState, t::Float64) = agent.simulation(t)
 
 function update_trait_snapshot!(agent::AgentState, t::Float64)
     isnothing(agent.simulation) && return nothing
-    display(t)
     agent.trait_snapshot = agent.simulation(t)
 end
 
