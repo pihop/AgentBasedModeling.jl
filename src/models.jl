@@ -72,7 +72,6 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
     modelrn = deepcopy(model.rn)
     ratef = _gen_rate_function(deepcopy(itxdef.rx.rx.rate), modelrn)
     ratefmax = _gen_rate_function(get_λmax(deepcopy(itxdef.rx.method)), modelrn)
-
     Lf = _gen_rate_function(get_L(deepcopy(itxdef.rx.method)), modelrn)
 
     ispopdep = false
@@ -126,6 +125,7 @@ end
 
 Base.isequal(pitxa::PopulationItx, pitxb::PopulationItx) = isequal(pitxa.uid, pitxb.uid)
 Base.hash(pitx::PopulationItx) = pitx.uid
+getuid(pitx::PopulationItx)::UInt = pitx.uid
 
 function process_interaction(inter::PopulationItxDef, model, params) 
     return PopulationItx(inter, model, params)
@@ -195,13 +195,13 @@ function AgentDynamics(dynamics::Union{Vector,Tuple}, constants)
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(constants)
-        push!(keys, c)             
-        push!(vals, (true, i))             
+        push!(keys, c)
+        push!(vals, (true, i))
     end
 
     for (i, c) in enumerate(unknowns(dynamics_))
-        push!(keys, c)             
-        push!(vals, (false, i))             
+        push!(keys, c)
+        push!(vals, (false, i))
     end
     AgentDynamics{typeof(dynamics_),length(constants)}(dynamics_, constants, Dict(keys .=> vals))
 end
@@ -323,7 +323,7 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
             dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps)
         return Trait(
             sym, 
-            JumpProblem(dynamics.dynamics, dprob, jumpaggregator), Dict(keys .=> vals))
+            JumpProblem(dynamics.dynamics, dprob, jumpaggregator; save_positions=(true, true)), Dict(keys .=> vals))
     end
 
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
@@ -379,14 +379,14 @@ function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
     jsys = convert(JumpSystem, complete(rn))
 
     oprob = SDEProblem(complete(sde), init, tspan, ps;) 
-    JumpProblem(complete(jsys), oprob, jumpaggregator; )
+    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
 end
 
 let x = Threads.Atomic{Int}(0)
     mutable struct AgentState{tType, sType, pType, inType, cType}
         sym::sType
         btime::tType
-        dtime::Union{tType, Nothing}
+        dtime::tType
         idx::Int64
         parents::pType
         srxs::Vector{Any}
@@ -395,7 +395,7 @@ let x = Threads.Atomic{Int}(0)
         consts::cType
         simulation::Union{Nothing, ODESolution, RODESolution}
 #        simulation_interp
-        trait_snapshot::Union{Vector{Float64}, Nothing}
+        trait_snapshot::Vector{Float64}
 
         function AgentState(btime::tType, sym::sType, init_trait::inType, consts::cType, parents::pType) where {tType, sType, inType, cType, pType}
             atomic_add!(x,1)
@@ -403,7 +403,7 @@ let x = Threads.Atomic{Int}(0)
             new{tType, sType, pType, inType, cType}(
                 sym,
                 btime,
-                nothing,
+                typemax(btime),
                 x.value,
                 parents,
                 Vector{Tuple{UInt, UInt}}(),
@@ -412,18 +412,18 @@ let x = Threads.Atomic{Int}(0)
                 init_trait,
                 consts,
                 nothing,
-                nothing)
+                zeros(Float64, length(init_trait)))
         end
     end
 end
 
 Base.isequal(a::AgentState, b::AgentState) = isequal(a.uid, b.uid)
 getsim(agent::AgentState, t::Float64) = agent.simulation(t)
-@inline getsymid(agent::AgentState)::Tuple{Num, UInt} = (agent.sym, agent.uid) 
+getsymid(agent::AgentState) = (agent.sym, agent.uid) 
 
 function update_trait_snapshot!(agent::AgentState, t::Float64)
     isnothing(agent.simulation) && return nothing
-    agent.trait_snapshot = agent.simulation(t)
+    agent.trait_snapshot = agent.simulation(t; continuity = :right)
 end
 
 function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
@@ -447,23 +447,20 @@ end
 
 struct SimulationReaction{pType,mType,sType,uType}
     pitx::pType
-#    substrates::NTuple{N3, AgentState}
     substrates::sType
     sampler::mType
     uid::uType
-end
 
-#function SimulationReaction(pitx::pType, substrates, sampler::mType) where {pType,mType}
-function SimulationReaction(pitx::pType, substrates, sampler::mType) where {pType,mType}
-    subs = getsymid.(substrates)
-    uid = hash(substrates, pitx.uid)
+    function SimulationReaction(pitx::pType, substrates, sampler::mType) where {pType,mType}
+        subs = getsymid.(substrates)
+        uid = hash(substrates, pitx.uid)
 
-    for r in substrates
-        push!(r.srxs, (pitx.uid, uid))
+        for r in substrates
+            push!(r.srxs, (getuid(pitx), uid))
+        end
+
+        return new{pType,mType,typeof(subs),typeof(uid)}(pitx, subs, sampler, uid)
     end
-
-    return SimulationReaction{pType,mType,typeof(subs),typeof(uid)}(pitx, subs, sampler, uid)
-#    return srx
 end
 
 Base.isequal(srxa::SimulationReaction, srxb::SimulationReaction) = isequal(srxa.uid, srxb.uid)

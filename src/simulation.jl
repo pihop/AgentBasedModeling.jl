@@ -32,38 +32,46 @@ function update_sampler!(state::SimulationState, tspan)
     end
 end
 
-struct SimulationParameters{T,DEAlg,JAgg,K,S}
+struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S}
     ps::T
     tspan::Tuple{Float64, Float64}
     Δt::Float64
     solver::DEAlg
+    jumpsolver::JumpAlg
     jumpaggregator::JAgg
     solverkws::K
     snapshot::S
     jitt::Float64
     maxpop::Float64
 
-    function SimulationParameters(ps::T, tspan, Δt, solver::DEAlg; jitt=1e-4, maxpop=Inf, snapshot::S=[], jumpaggregator::JAgg=Direct(), solverkws::K=()) where {DEAlg<:SciMLBase.DEAlgorithm, JAgg<:JumpProcesses.AbstractAggregatorAlgorithm, T,K,S}
-        new{T,DEAlg,JAgg,K,S}(ps, tspan, Δt, solver, jumpaggregator, solverkws, snapshot, jitt, maxpop)
+    function SimulationParameters(ps::T, tspan, Δt, solver::DEAlg=Rodas4(); jitt=1e-4, maxpop=Inf, snapshot::S=[], jumpsolver=SSAStepper(), jumpaggregator::JAgg=Direct(), solverkws::K=()) where {DEAlg, JAgg<:JumpProcesses.AbstractAggregatorAlgorithm, T,K,S}
+        new{T,DEAlg,typeof(jumpsolver),JAgg,K,S}(ps, tspan, Δt, solver, jumpsolver, jumpaggregator, solverkws, snapshot, jitt, maxpop)
     end
 end
 
 function substitute_agent(subs, agents, pop, model)
     isempty(subs) && return ()
 
-    idx = findfirst(x -> x in keys(agents), subs)
-    isnothing(idx) && return ()
+    substitutions = []
 
-    subbed = Vector{Base.ValueIterator{IdDict{UInt64, Any}}}(undef, length(subs))
+    for agent in agents
+        idxs = findall(x -> isequal(x, agent[1]), subs)
+        isnothing(idxs) && continue
 
-    subbed[idx] = values(agents[subs[idx]])
-    idxs_ = Iterators.flatten((max(1, idx-1):idx-1, idx+1:length(subs)))
-    for idx_ in idxs_
-        subbed[idx_] = values(pop[subs[idx_]])
+        subbed = Vector{Base.ValueIterator{IdDict{UInt64, Any}}}(undef, length(subs))
+
+        for idx in idxs
+            subbed[idx] = values(agents[subs[idx]])
+            idxs_ = Iterators.flatten((max(1, idx-1):idx-1, idx+1:length(subs)))
+            for idx_ in idxs_
+                subbed[idx_] = values(pop[subs[idx_]])
+            end
+
+            # Make sure combinations with duplicate agents are removed.
+            push!(substitutions, Iterators.filter(allunique, Iterators.product(subbed...)))
+        end
     end
-
-    # Make sure combinations with duplicate agents are removed.
-    return Iterators.filter(allunique, Iterators.product(subbed...))
+    return Iterators.flatten(substitutions)
 end
 
 function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType, params::pType; make_zero_substrate_rx=true) where {aType, sType, mType, tType, pType}
@@ -75,7 +83,7 @@ function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType
         substoich = rx.itxdef.rx.rx.substoich
 
         isempty(substrates) && !make_zero_substrate_rx && continue
-        
+
         subs = vcat(fill.(Num.(substrates), substoich)...)
         reacts = substitute_agent(subs, agents, state.pop, model)
 
@@ -92,46 +100,46 @@ function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType
     end
 end
 
-function simulate_internal(problem, agent, init, tspan, ps, solver; model, kwargs...)
+function simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model, kwargs...)
     u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
     prob = remake(problem, u0=u0, tspan=tspan)
-    return solve(prob, solver; kwargs...) 
+    if problem.prob isa DiscreteProblem
+        return solve(prob, jumpsolver; kwargs...), jumpsolver 
+    else 
+        return solve(prob, solver; kwargs...), solver
+    end
 end
 
-function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver; model)
+function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
     init = agent.init_trait
-    sim = simulate_internal(
-        problem, agent, init, (agent.btime, tspan[end]), ps, solver; model=model)
+    sim, _ = simulate_internal(
+        problem, agent, init, (agent.btime, tspan[end]), ps, solver, jumpsolver; model=model)
 
     agent.simulation = sim
-#    Interpolations.deduplicate_knots!(agent.simulation.t)
-#    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
 end
 
-function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, solver; model)
+function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
     nothing
 end
 
-function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution}, tspan, ps, solver; model)
+function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution}, tspan, ps, solver, jumpsolver; model)
     k_ = first.(agent.init_trait)
     init = Tuple(k_ .=> agent.simulation(tspan[1]; idxs=collect(k_)))
 
-    sim = simulate_internal(problem, agent, init, tspan, ps, solver; model=model)
-
+    tspan[2] == tspan[1] && return nothing
+    sim, alg = simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model=model)
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
-        :NoAlgorithm,
+        alg,
         [agentsim.t; sim.t], 
         [agentsim.u; sim.u], 
         successful_retcode=true)
-#    Interpolations.deduplicate_knots!(agent.simulation.t; move_knots = true)
-#    agent.simulation_interp = interpolate((agent.simulation.t, ), agent.simulation.u, Gridded(Linear()))
 end
 
 function simulate_traits!(pop, tstart, tend, params; model, kwargs...)
     for (uid,agent) in Iterators.flatten(values(pop))
         append_sim!(
-            model.traitprobs[agent.sym].problem, agent, agent.simulation, (tstart, tend), params.ps, params.solver; model=model)
+            model.traitprobs[agent.sym].problem, agent, agent.simulation, (tstart, tend), params.ps, params.solver, params.jumpsolver; model=model)
     end
 end
 
@@ -171,14 +179,14 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, model::Popu
 
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
-            agent_ = AgentState(time, agent, (), (), substrates)
+            agent_ = AgentState(time, agent, (), (), Vector{Tuple{Num, idType}}(getsymid.(substrates)))
             new[agent][agent_.uid] = agent_
             continue
         end
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
-        agent_ = AgentState(time, agent, tr, c, substrates)
+        agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)))
         new[agent][agent_.uid] = agent_
     end
     return new, substrates
@@ -193,7 +201,7 @@ function push_to_pop!(pop::Dict, agents::Dict)
     end
 end
 
-function push_to_pop!(pop::Dict, agents::Vector) 
+function push_to_pop!(pop::Dict, agents) 
     for agent in agents
         !in(agent.sym, keys(pop)) && begin pop[agent.sym] = IdDict{idType, Any}() end
         pop[agent.sym][agent.uid] = agent 
@@ -300,6 +308,7 @@ function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, re
 
     for agent in agents
         for save in in_traits 
+            !isequal(save.agent, agent.sym) && continue
             name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
             idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
@@ -368,7 +377,7 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
         c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits)...) for x in cts)
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits)...) for x in unknowns(dyn))
 
-        agent_ = AgentState(tspan[1], agent, tr, c, nothing)
+        agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}())
         pop[agent][agent_.uid] = agent_ 
     end
     return pop

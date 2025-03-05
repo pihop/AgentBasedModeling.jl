@@ -105,12 +105,12 @@ SciMLBase.interp_summary(::T) where T <: Interpolations.Extrapolation = "Linear 
 
 function lineage(res, cell)
     lin = [] 
-    isnothing(cell.parents) && return [cell, ]
+    isempty(cell.parents) && return [cell, ]
     cell_ = cell.parents[1]
     while true 
-        savecell_ = res.agents[cell_.sym][cell_.uid]
+        savecell_ = res.agents[cell_[1]][cell_[2]]
         push!(lin, savecell_)
-        isnothing(savecell_.parents) && return reverse(lin)
+        isempty(savecell_.parents) && return reverse(lin)
         cell_ = savecell_.parents[1]
     end
     return reverse(lin)
