@@ -9,10 +9,7 @@ mutable struct PopulationItxAggregator{mType,rxType,S}
     Lmin::S
 end
 
-#PopulationItx{iType, F1, F2, F3, psType, pvType, pmType, srType}
 function build_aggregate(pitx::rxType, t) where {rxType}
-#SimulationReaction{pType,mType,subType}
-#    Tuple{sType, UInt}
     PopulationItxAggregator{typeof(pitx.itxdef.rx.method),rxType,typeof(t)}(
         pitx.itxdef.rx.method,
         IdDict{UInt, Any}(), 
@@ -56,7 +53,8 @@ function compute_extrande_bounds!(aggregate::A,
             aggregate.Bmax += rB
         else 
             aggregate.Bmax += 0.0 
-            @warn "Rate bound evaluated to $rB < 0. Assuming 0 but make sure bound functions are correctly specified."
+            @warn "Rate bound evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping.
+            If large negative values check the bound functions in the model are correctly specified."
         end
     end
 end
@@ -100,7 +98,8 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,rxType,S}, st
                 cur_rate += r 
             else 
                 cur_rate += 0.0 
-                @warn "Rate evaluated to $r < 0. Assuming 0 but make sure rate functions are correctly specified."
+                @warn "Rate evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping.
+                If large negative values check the rate functions in the model are correctly specified."
             end
 
             if cur_rate ≥ UBmax
@@ -113,8 +112,6 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,rxType,S}, st
 
     aggregate.next_rx = next_rx
     aggregate.next_rx_time = next_rx_time
-
-    return nothing
 end
 
 function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S}
@@ -180,7 +177,6 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S
    
     for rx in rxs 
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
-#        substrates = rx.substrates
         reaction_time = sample_first_arrival(
             ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=lookahead)
         reaction_time < next_rx_time && begin
