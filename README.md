@@ -66,7 +66,7 @@ tspan = (0, 10.0)
 simulation_params = SimulationParameters(ps, tspan, Δt, Tsit5();
     snapshot=[PopulationSnapshot(C), ])
 ```
-Simulate the system and show display the population size snapshots.
+Simulate the system and display the population size snapshots.
 ```julia
 res = simulate(cell_population_model, init_pop, simulation_params)
 res.snapshot[:C]
