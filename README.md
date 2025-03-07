@@ -46,8 +46,8 @@ gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/μ, μ*c
 divide = @interaction begin
     @channel γdiv($μ, $cv, $Cs, $Cτ, a), $C --> 2*$C
     @sampler ExtrandeMethod(1/($μ * $cv), $L)
-    @connections ($Cτ, $C, $τ) ($Cs, $C, $s)
-    @transition ($τ => 0.0, $s => 0.5*$Cs), ($τ => 0.0, $s => 0.5*$Cs)
+    @connections (($Cτ => $τ, $Cs, => $s),)
+    @transition (($τ => 0.0, $s => 0.5*$Cs), ($τ => 0.0, $s => 0.5*$Cs))
 end
 ```
 Combine the agent dynamics and interactions into a model.
