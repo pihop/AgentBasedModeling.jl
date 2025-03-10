@@ -103,7 +103,7 @@ end
 function simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model, kwargs...)
     u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
     prob = remake(problem, u0=u0, tspan=tspan)
-    if problem.prob isa DiscreteProblem
+    if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
         return solve(prob, jumpsolver; kwargs...), jumpsolver 
     else 
         return solve(prob, solver; kwargs...), solver
@@ -112,10 +112,17 @@ end
 
 function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
     init = agent.init_trait
-    sim, _ = simulate_internal(
+    sim, alg = simulate_internal(
         problem, agent, init, (agent.btime, tspan[end]), ps, solver, jumpsolver; model=model)
 
-    agent.simulation = sim
+    agent.simulation = SciMLBase.build_solution(
+        sim.prob, 
+        alg,
+        sim.t, 
+        sim.u, 
+        successful_retcode=true,
+        interp = SciMLBase.ConstantInterpolation(sim.t, sim.u)
+       )
 end
 
 function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
@@ -128,12 +135,17 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
 
     tspan[2] == tspan[1] && return nothing
     sim, alg = simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model=model)
+    ts = [agentsim.t; sim.t]
+#    deduplicate_knots!(ts)
+#    Interpolations.deduplicate_knots!(ts)
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
         alg,
-        [agentsim.t; sim.t], 
+        ts, 
         [agentsim.u; sim.u], 
-        successful_retcode=true)
+        successful_retcode=true,
+        interp = SciMLBase.ConstantInterpolation(ts, [agentsim.u; sim.u])
+       )
 end
 
 function simulate_traits!(pop, tstart, tend, params; model, kwargs...)
@@ -271,7 +283,7 @@ end
 
 function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
-    out_traits = filter(x -> x isa SaveInStateTrait, saving) 
+    out_traits = filter(x -> x isa SaveOutStateTrait, saving) 
     isempty(saving) && return nothing 
 
     savevalues = Dict()
