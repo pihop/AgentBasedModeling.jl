@@ -159,6 +159,15 @@ function pstate!(pmod, pvec, subsrules, model, substrates, state, t::Float64)
     end
 end
 
+function pstate(pmod, subsrules, model, substrates, state, t::Float64)
+    pvec = zeros(Float64, length(pmod)) 
+    isempty(pmod) && return nothing 
+    for (p, i, (idx_, sym_, la_)) in pmod
+        @inbounds pvec[i] = get_trait_value(substrates[idx_], t, la_)
+    end
+    return pvec
+end
+
 struct HybridSDEDynamics{cType, dType}
     continuous::cType
     discrete::dType
@@ -185,13 +194,7 @@ function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
         the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
 end
 
-function AgentDynamics(dynamics::Union{Vector,Tuple}, constants) 
-    if length(dynamics) > 1
-        dynamics_ = extend(dynamics...)
-    elseif length(dynamics) == 1
-        dynamics_ = dynamics[1]
-    end
-
+function AgentDynamics(dynamics, constants) 
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(constants)
@@ -199,11 +202,11 @@ function AgentDynamics(dynamics::Union{Vector,Tuple}, constants)
         push!(vals, (true, i))
     end
 
-    for (i, c) in enumerate(unknowns(dynamics_))
+    for (i, c) in enumerate(unknowns(dynamics))
         push!(keys, c)
         push!(vals, (false, i))
     end
-    AgentDynamics{typeof(dynamics_),length(constants)}(dynamics_, constants, Dict(keys .=> vals))
+    AgentDynamics{typeof(dynamics),length(constants)}(dynamics, constants, Dict(keys .=> vals))
 end
 
 struct Trait{T}
@@ -287,7 +290,7 @@ function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwarg
     Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
 end
 
-function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics, N}, tspan, ps; jumpaggregator) where {N}
+function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics{cType, dType}, N}, tspan, ps; jumpaggregator) where {cType, dType, N}
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
@@ -319,11 +322,11 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
     end
 
     isempty(setdiff(equations(dynamics.dynamics), reactions(dynamics.dynamics))) && begin 
-        dprob = DiscreteProblem(
-            dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps)
+        dyn = dynamics.dynamics
+        jin = JumpInputs(dyn, zeros(length(unknowns(dyn))), tspan, ps)
         return Trait(
             sym, 
-            JumpProblem(dynamics.dynamics, dprob, jumpaggregator; save_positions=(true, true)), Dict(keys .=> vals))
+            JumpProblem(jin), Dict(keys .=> vals))
     end
 
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
@@ -340,35 +343,48 @@ function make_trait_problem(sym, dynamics::AgentDynamics{EmptyTraitProblem, N}, 
     Trait(sym, dynamics.dynamics, Dict(keys .=> vals))
 end
 
-function make_hybrid(trait, init, tspan, ps; jumpaggregator)
-    eqs = setdiff(equations(trait), reactions(trait))
+function make_hybrid(rs, init, tspan, params; 
+        jumpaggregator, 
+        name = nameof(rs),
+        checks = false,
+        combinatoric_ratelaws=Catalyst.get_combinatoric_ratelaws(rs),
+        include_zero_odes=true)
+    # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
+    
+    flatrs = Catalyst.flatten(rs)
+    eqs = Any[assemble_hybrid_jumps(flatrs)...]
+    ists, ispcs = Catalyst.get_indep_sts(flatrs)
+    eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
+        remove_conserved = false)
 
-    @named rn = ReactionSystem(
-        reactions(trait), 
-        ModelingToolkit.get_iv(trait), 
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)), 
-        parameters(trait))
+    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
+            observed = obs,
+            name,
+            defaults = MT._merge(Dict(), MT.defaults(flatrs)),
+            checks,
+            discrete_events = MT.discrete_events(flatrs),
+            continuous_events = MT.continuous_events(flatrs),)
 
-    @named odes = ODESystem([eqs...], 
-        ModelingToolkit.get_iv(trait), unknowns(trait), parameters(trait);)
-    jsys = convert(JumpSystem, complete(rn))
+    u0map = symmap_to_varmap(rs, init)
+    pmap = symmap_to_varmap(rs, params)
 
-    oprob = ODEProblem(complete(odes), init, tspan, ps;)
-    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions = (true,true))
+    prob = ODEProblem(complete(jsys), u0map, tspan, pmap; )
+    jprob = JumpInputs(complete(jsys), prob)
+    return JumpProblem(jprob)
 end
 
 function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
+    # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
     eqs = equations(trait.continuous)
     rxs = reactions(trait.discrete)  
 
-    @named rn = ReactionSystem(
-        rxs, 
+    @named rs = ReactionSystem(
+        [rxs; eqs], 
         ModelingToolkit.get_iv(trait.discrete), 
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
         first.(ps))
 
-    jsys = convert(JumpSystem,  complete(rn))
-   
+#    jsys = convert(JumpSystem,  complete(rs))
     @named sde = SDESystem(
         eqs,
         vcat(trait.continuous.noiseeqs...),
@@ -376,11 +392,68 @@ function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
         first.(ps))
 
-    jsys = convert(JumpSystem, complete(rn))
-
     oprob = SDEProblem(complete(sde), init, tspan, ps;) 
-    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
+#
+#    jumps = Catalyst.assemble_jumps(rs)
+
+    flatrs = Catalyst.flatten(rs)
+    eqs = Any[assemble_hybrid_jumps(flatrs)...]
+#    ists, ispcs = Catalyst.get_indep_sts(flatrs)
+#    eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
+#        remove_conserved = false)
+#
+#    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
+#            observed = obs,
+#            name,
+#            defaults = MT._merge(Dict(), MT.defaults(flatrs)),
+#            checks,
+#            discrete_events = MT.discrete_events(flatrs),
+#            continuous_events = MT.continuous_events(flatrs),)
+#
+#    u0map = symmap_to_varmap(rs, init)
+#    pmap = symmap_to_varmap(rs, params)
+#
+#    prob = SDEProblem(complete(jsys), u0map, tspan, pmap; )
+#    jprob = JumpInputs(complete(jsys), prob)
+
+#    flatrs = Catalyst.flatten(rs)
+#    sts, ispcs = Catalyst.get_indep_sts(flatrs)
+#    ps = Catalyst.get_ps(flatrs)
+#
+#    jsys = convert(JumpSystem, complete(rs))
+#    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
 end
+
+#function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
+#    # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
+#    eqs = equations(trait.continuous)
+#    rxs = reactions(trait.discrete)  
+#    display(eqs)
+#
+#    @named rs = ReactionSystem(
+#        [rxs; eqs], 
+#        ModelingToolkit.get_iv(trait.discrete), 
+#        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
+#        first.(ps))
+#
+##    jsys = convert(JumpSystem,  complete(rs))
+#    @named sde = SDESystem(
+#        eqs,
+#        vcat(trait.continuous.noiseeqs...),
+#        ModelingToolkit.get_iv(trait.continuous),
+#        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
+#        first.(ps))
+#
+#    oprob = SDEProblem(complete(sde), init, tspan, ps;) 
+#
+#    jumps = Catalyst.assemble_jumps(rs)
+#    flatrs = Catalyst.flatten(rs)
+#    sts, ispcs = Catalyst.get_indep_sts(flatrs)
+#    ps = Catalyst.get_ps(flatrs)
+#
+#    jsys = convert(JumpSystem, complete(rs))
+#    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
+#end
 
 let x = Threads.Atomic{Int}(0)
     mutable struct AgentState{tType, sType, pType, inType, cType}
@@ -427,8 +500,10 @@ function update_trait_snapshot!(agent::AgentState, t::Float64)
 end
 
 function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
+    # pair = (Bool, Int) where pair[1] is whether the trait is constant and
+    # pair[2] is the index of the trait in a simulation.
     pair[1] && return last(agent.consts[pair[2]])
-    return @inbounds agent.trait_snapshot[pair[2]]
+    return @inbounds agent.simulation(t)[pair[2]]
 end
 
 function Base.show(io::IO, agent::AgentState)
