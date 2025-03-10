@@ -59,6 +59,10 @@ end
 
 function process_channel(expr, sexpr)
     # Parses reactions, species, and parameters.
+    arrow, rate, reaction, metadata = Catalyst.read_reaction_line(expr.args[3])
+    arrow in Catalyst.double_arrows && begin
+        error("Bi-directional arrows in the interaction definitions are not allowed.")
+    end
     rx = Catalyst.make_reaction(expr.args[3])
     rx
 end
