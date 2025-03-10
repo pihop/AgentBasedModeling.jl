@@ -12,15 +12,19 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
     return proposet
 end
 
-struct ExtrandeMethod
-    λmax::Num
+struct ExtrandeMethod{B, F}
+    λmax::F
     L::Num
     trait_indep::Bool
     pop_indep::Bool
-    
-    function ExtrandeMethod(λmax, L; trait_indep=false, pop_indep=false)
-        new(λmax, L, trait_indep, pop_indep)
-    end
+end
+
+function ExtrandeMethod(L; trait_indep=false, pop_indep=false)
+    ExtrandeMethod{false,typeof(nothing)}(nothing, L, trait_indep, pop_indep)
+end
+
+function ExtrandeMethod(λmax, L; trait_indep=false, pop_indep=false)
+    ExtrandeMethod{true,typeof(λmax)}(λmax, L, trait_indep, pop_indep)
 end
 
 Base.show(io::IO, sampler::ExtrandeMethod) = print(io, "Extrande method")

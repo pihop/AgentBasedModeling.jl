@@ -59,7 +59,7 @@ function compute_extrande_bounds!(aggregate::A,
     end
 end
 
-function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod,rxType,S}, state, model, params, tspan; recompute=true) where {rxType,S}
+function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{true,T},rxType,S}, state, model, params, tspan; recompute=true) where {rxType,T,S}
     rxs = values(aggregate.rxs)
     len = length(rxs)
 
@@ -132,24 +132,31 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
     ratef = first(rxs).pitx.ratef
     sampler = first(rxs).sampler
 
-    total_rate = 0.0
+    rates = zeros(length(rxs)) 
+    cumsum = zeros(length(rxs)) 
+    prevsum = 0.0
+    idx = 1
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         # Each agent might have constants.
         pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
         r = ratef(pop_, pvec_, tspan[1])
         if r >= 0.0 
-            total_rate += r 
+            rates[idx] = r 
+            cumsum[idx] = prevsum + r
         else 
-            total_rate += 0.0 
+            push!(rates, 0.0)
             @warn "Rate evaluated to $r < 0. Assuming 0 but make sure rate functions are correctly specified."
         end
+        prevsum = cumsum[idx]
+        idx += 1
     end
 
-    ttnj = tspan[1] + randexp() / total_rate
+    ttnj = tspan[1] + randexp() / cumsum[end] 
+    njidx = findfirst(x -> x > rand()*cumsum[end], cumsum)
 
     if ttnj < next_rx_time
-        aggregate.next_rx = rand(collect(rxs)).uid
+        aggregate.next_rx = collect(rxs)[njidx].uid
         aggregate.next_rx_time = ttnj
     end
 end
@@ -188,34 +195,6 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S
     aggregate.next_rx = next_rx
     aggregate.next_rx_time = next_rx_time 
 end
-
-#function sample_(aggregate::PopulationItxAggregator{DirectSampler,N1,cType,sType,F1,F2,N2,S}, state, model, params, tspan, method::FirstReactionMethod; kwargs...) where {N1,cType,sType,F1,F2,N2,S}
-#    rxs = values(aggregate.rxs)
-#
-#    aggregate.next_rx_time = Inf #tspan[end] 
-#    aggregate.next_rx = 0
-#    isempty(rxs) && return nothing
-#      
-#    pop_ = state.pop_state
-#    pvec_ = first(rxs).pitx.pvec
-#    pmod_ = first(rxs).pitx.pmod
-#    subsrules_ = first(rxs).pitx.subsrules
-#
-#    aggregate.next_rx_time = min(tspan[1] + first(rxs).pitx.Lf(pop_, pvec_, tspan[1]), tspan[end])
-#
-#    for rx in rxs 
-#        ratemax = rx.pitx.ratefmax
-#        Lf = rx.pitx.Lf
-#
-#        substrates = rx.substrates
-#        reaction_time = sample_first_arrival(
-#            rx.pitx.ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, rx.sampler, model; ratemax=ratemax, Lf=Lf)
-#        reaction_time <= aggregate.next_rx_time && begin
-#            aggregate.next_rx = rx.uid
-#            aggregate.next_rx_time = reaction_time 
-#        end
-#    end
-#end
 
 function sample_aggregates!(srxs::IdDict{UInt, Any}, state, model, params, tspan; recompute)
     for srx in srxs
