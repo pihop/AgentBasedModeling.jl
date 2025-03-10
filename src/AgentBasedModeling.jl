@@ -1,39 +1,35 @@
 module AgentBasedModeling
 
     using Catalyst
+    import Catalyst: get_rxs, drop_dynamics, get_depgraph, dfs_mark!, makemajump
     using MacroTools
-#    using DiffEqBase
+
     import JumpProcesses: JumpProblem
     using Symbolics
+    import Symbolics: Symbolic
     using SymbolicUtils
-#    using OrderedCollections
+    using OrdinaryDiffEq
+
     using ModelingToolkit
-    import ModelingToolkit: value
-#    using DataStructures
-#    MT = ModelingToolkit
-#    using Distributions 
+    import ModelingToolkit: value, get_variables!, get_iv, get_unknowns
+    MT = ModelingToolkit
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools
     using JumpProcesses
-#    using RuntimeGeneratedFunctions
+
     using StatsBase
     using ProgressMeter
     using Random
-#    using FunctionWrappers
-#    import FunctionWrappers: FunctionWrapper
     using CommonSolve 
     using Interpolations
     import Interpolations: scale
-#    using LinearAlgebra
+
     using InteractiveUtils
-#    using BenchmarkTools
     using Base.Threads
     
-#    const idType = UUID
     const idType = UInt
 
-#    RuntimeGeneratedFunctions.init(@__MODULE__)
     const DEFAULT_RNG = Random.default_rng()
 
     include("utils.jl")
