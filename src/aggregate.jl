@@ -23,19 +23,16 @@ end
 function compute_extrande_bounds!(aggregate::A, 
         rxs::R, state::S, model::M, params::P, tspan::T, len::Ltype) where {A <: PopulationItxAggregator, R, S, M, P, T, Ltype <: Int}
     rx_ = first(rxs)
-    pop_ = state.pop_state
-    pvec_ = first(rxs).pitx.pvec
-    pmod_ = first(rxs).pitx.pmod
-    subsrules_ = first(rxs).pitx.subsrules
-    Lf = first(rxs).pitx.Lf 
-    ratefmax = first(rxs).pitx.ratefmax
+
+    pop = state.pop_state
+    @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
 
     if aggregate.sampler.trait_indep 
         # Same bound of all reactions.
         substrates = AgentState[get_agent(state, agent) for agent in rx_.substrates]
-        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
-        aggregate.Bmax = len * ratefmax(pop_, pvec_, tspan[1])
-        aggregate.Lmin = Lf(pop_, pvec_, tspan[1])
+        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        aggregate.Bmax = len * ratefmax(pop, pvec_, tspan[1])
+        aggregate.Lmin = Lf(pop, pvec_, tspan[1])
         return nothing
     end
 
@@ -43,12 +40,12 @@ function compute_extrande_bounds!(aggregate::A,
     aggregate.Lmin = Inf
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
-        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
-        L = Lf(pop_, pvec_, tspan[1])
+        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        L = Lf(pop, pvec, tspan[1])
         if L < aggregate.Lmin
             aggregate.Lmin = L
         end
-        rB = ratefmax(pop_, pvec_, tspan[1]) 
+        rB = ratefmax(pop, pvec, tspan[1]) 
         if rB >= 0.0 
             aggregate.Bmax += rB
         else 
@@ -60,6 +57,7 @@ function compute_extrande_bounds!(aggregate::A,
 end
 
 function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{true,T},rxType,S}, state, model, params, tspan; recompute=true) where {rxType,T,S}
+    # When bounds are given. ExtrandeMethod{true, T}
     rxs = values(aggregate.rxs)
     len = length(rxs)
 
@@ -71,13 +69,8 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{true,T},rxTyp
 
     isempty(rxs) && return nothing
 
-    pop_ = state.pop_state
-    pvec_ = first(rxs).pitx.pvec
-    pmod_ = first(rxs).pitx.pmod
-    subsrules_ = first(rxs).pitx.subsrules
-    Lf = first(rxs).pitx.Lf 
-    ratefmax = first(rxs).pitx.ratefmax
-    ratef = first(rxs).pitx.ratef
+    @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
+    pop = state.pop_state
 
     compute_extrande_bounds!(aggregate, rxs, state, model, params, tspan, len)
 
@@ -92,8 +85,8 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{true,T},rxTyp
 
         for rx in rxs 
             substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
-            pstate!(pmod_, pvec_, subsrules_, model, substrates, state, prop_ttnj)
-            r = ratef(pop_, pvec_, prop_ttnj)
+            pstate!(pmod, pvec, subsrules, model, substrates, state, prop_ttnj)
+            r = ratef(pop, pvec, prop_ttnj)
             if r >= 0.0 
                 cur_rate += r 
             else 
@@ -114,6 +107,52 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{true,T},rxTyp
     aggregate.next_rx_time = next_rx_time
 end
 
+function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{false,T},rxType,S}, state, model, params, tspan; recompute=true) where {rxType,T,S}
+    # When bounds are not given. ExtrandeMethod{false, T}
+    rxs = values(aggregate.rxs)
+    len = length(rxs)
+
+    next_rx = 0
+    next_rx_time = Inf
+
+    aggregate.next_rx = next_rx
+    aggregate.next_rx_time = next_rx_time
+
+    isempty(rxs) && return nothing
+
+    pop = state.pop_state
+    @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
+
+    rates = zeros(length(rxs)) 
+    cumsum = zeros(length(rxs)) 
+    prevsum = 0.0
+    idx = 1
+#    for rx in rxs
+#        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+#        # Each agent might have constants.
+#        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
+#        r = ratef(pop_, pvec_, tspan[1])
+#        if r >= 0.0 
+#            rates[idx] = r 
+#            cumsum[idx] = prevsum + r
+#        else 
+#            push!(rates, 0.0)
+#            @warn "Rate evaluated to $r < 0. Assuming 0 but make sure rate functions are correctly specified."
+#        end
+#        prevsum = cumsum[idx]
+#        idx += 1
+#    end
+#
+#    ttnj = tspan[1] + randexp() / cumsum[end] 
+#    njidx = findfirst(x -> x > rand()*cumsum[end], cumsum)
+#
+#    if ttnj < next_rx_time
+#        aggregate.next_rx = collect(rxs)[njidx].uid
+#        aggregate.next_rx_time = ttnj
+#    end
+end
+
+
 function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S}
     rxs = values(aggregate.rxs)
 
@@ -125,12 +164,8 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
 
     isempty(rxs) && return nothing
 
-    pop_ = state.pop_state
-    pvec_ = first(rxs).pitx.pvec
-    pmod_ = first(rxs).pitx.pmod
-    subsrules_ = first(rxs).pitx.subsrules
-    ratef = first(rxs).pitx.ratef
-    sampler = first(rxs).sampler
+    pop = state.pop_state
+    @unpack pvec, pmod, subsrules, ratef = first(rxs).pitx
 
     rates = zeros(length(rxs)) 
     cumsum = zeros(length(rxs)) 
@@ -139,8 +174,8 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         # Each agent might have constants.
-        pstate!(pmod_, pvec_, subsrules_, model, substrates, state, tspan[1])
-        r = ratef(pop_, pvec_, tspan[1])
+        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        r = ratef(pop, pvec, tspan[1])
         if r >= 0.0 
             rates[idx] = r 
             cumsum[idx] = prevsum + r
@@ -169,23 +204,17 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S
 
     aggregate.next_rx = next_rx
     aggregate.next_rx_time = next_rx_time 
-   
+
     isempty(rxs) && return nothing
-      
-    pop_ = state.pop_state
-    pvec_ = first(rxs).pitx.pvec
-    pmod_ = first(rxs).pitx.pmod
-    subsrules_ = first(rxs).pitx.subsrules
-    ratemax = first(rxs).pitx.ratefmax
-    lookahead = first(rxs).pitx.Lf
-    ratefmax = first(rxs).pitx.ratefmax
-    ratef = first(rxs).pitx.ratef
+
+    pop = state.pop_state
+    @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
     sampler = first(rxs).sampler
-   
+
     for rx in rxs 
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         reaction_time = sample_first_arrival(
-            ratef, pop_, pvec_, pmod_, subsrules_, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=lookahead)
+            ratef, pop, pvec, pmod, subsrules, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=Lf)
         reaction_time < next_rx_time && begin
             next_rx_time = reaction_time
             next_rx = rx.uid
