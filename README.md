@@ -46,8 +46,8 @@ gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/μ, μ*c
 divide = @interaction begin
     @channel γdiv($μ, $cv, $Cs, $Cτ, a), $C --> 2*$C
     @sampler ExtrandeMethod(1/($μ * $cv), $L)
-    @connections ($Cτ, $C, $τ) ($Cs, $C, $s)
-    @transition ($τ => 0.0, $s => 0.5*$Cs), ($τ => 0.0, $s => 0.5*$Cs)
+    @connections (($Cτ => $τ, $Cs, => $s),)
+    @transition (($τ => 0.0, $s => 0.5*$Cs), ($τ => 0.0, $s => 0.5*$Cs))
 end
 ```
 Combine the agent dynamics and interactions into a model.
@@ -66,7 +66,7 @@ tspan = (0, 10.0)
 simulation_params = SimulationParameters(ps, tspan, Δt, Tsit5();
     snapshot=[PopulationSnapshot(C), ])
 ```
-Simulate the system and show display the population size snapshots.
+Simulate the system and display the population size snapshots.
 ```julia
 res = simulate(cell_population_model, init_pop, simulation_params)
 res.snapshot[:C]
