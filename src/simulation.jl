@@ -102,7 +102,7 @@ end
 
 function simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model, kwargs...)
     u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
-    prob = remake(problem, u0=u0, tspan=tspan)
+    prob = remake(problem, u0=Float64.(u0), tspan=tspan)
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
         return solve(prob, jumpsolver; kwargs...), jumpsolver 
     else 
@@ -284,12 +284,13 @@ end
 function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
     out_traits = filter(x -> x isa SaveOutStateTrait, saving) 
-    isempty(saving) && return nothing 
+    isempty(out_traits) && return nothing 
 
     savevalues = Dict()
 
     for agent in Iterators.flatten(values.(values(agents)))
         for save in out_traits 
+            !isequal(save.agent, agent.sym) && continue
             name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
             idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
@@ -297,7 +298,7 @@ function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, r
             !in(name, keys(savevalues)) && begin 
                 savevalues[name] = Float64[]
             end
-            push!(savevalues[name], agent.init_trait[idx][2])
+            push!(savevalues[name], Float64(agent.init_trait[idx][2]))
         end
     end
 
@@ -314,7 +315,7 @@ end
 function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
     in_traits = filter(x -> x isa SaveInStateTrait, saving) 
-    isempty(saving) && return nothing 
+    isempty(in_traits) && return nothing 
 
     savevalues = Dict()
 
@@ -444,7 +445,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
                 # them as substrates.
                 filter_rxs!(state, deleted_agents)
 
-                # Simulate traits of the new agents to the end of the tspan.   
+                # Simulate traits of the new agents to tend.   
                 simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
 
                 log_outstates!(srx, state, next_rx_time, new_agents, model, results)
