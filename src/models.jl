@@ -484,10 +484,11 @@ end
 #end
 
 let x = Threads.Atomic{Int}(0)
-    mutable struct AgentState{tType, sType, pType, inType, cType}
+    mutable struct AgentState{tType, biType, sType, pType, inType, cType}
         sym::sType
         btime::tType
         dtime::tType
+        binteraction::biType
         idx::Int64
         parents::pType
         srxs::Vector{Any}
@@ -495,20 +496,19 @@ let x = Threads.Atomic{Int}(0)
         init_trait::inType
         consts::cType
         simulation::Union{Nothing, ODESolution, RODESolution}
-#        simulation_interp
         trait_snapshot::Vector{Float64}
 
-        function AgentState(btime::tType, sym::sType, init_trait::inType, consts::cType, parents::pType) where {tType, sType, inType, cType, pType}
+        function AgentState(btime::tType, sym::sType, init_trait::inType, consts::cType, parents::pType, binteraction::biType) where {tType, biType, sType, inType, cType, pType}
             atomic_add!(x,1)
 
-            new{tType, sType, pType, inType, cType}(
+            new{tType, biType, sType, pType, inType, cType}(
                 sym,
                 btime,
                 typemax(btime),
+                binteraction,
                 x.value,
                 parents,
                 Vector{Tuple{UInt, UInt}}(),
-#                Vector{Any}(),
                 hash(sym, hash(x.value)),
                 init_trait,
                 consts,

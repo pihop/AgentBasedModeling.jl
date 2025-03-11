@@ -191,14 +191,14 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, model::Popu
 
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
-            agent_ = AgentState(time, agent, (), (), Vector{Tuple{Num, idType}}(getsymid.(substrates)))
+            agent_ = AgentState(time, agent, (), (), Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.pitx.itxdef.name)
             new[agent][agent_.uid] = agent_
             continue
         end
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
-        agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)))
+        agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.pitx.itxdef.name)
         new[agent][agent_.uid] = agent_
     end
     return new, substrates
@@ -390,7 +390,7 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
         c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits)...) for x in cts)
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits)...) for x in unknowns(dyn))
 
-        agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}())
+        agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}(), nothing)
         pop[agent][agent_.uid] = agent_ 
     end
     return pop
