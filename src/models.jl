@@ -1,5 +1,7 @@
 abstract type AbstractParameterCnx end
 
+#SpecifiedNumerics = Union{Real, Matrix{Real}, Array{Real}}
+
 struct ParameterCnx{pType, iType} <: AbstractParameterCnx
     parameter::pType
     idx::iType
@@ -11,8 +13,34 @@ struct Variable{pType,fType} <: AbstractParameterCnx
 end
 
 function variable_subs(vars, pstate, symbs)
-    pstatesubs = [x => y for (x, y) in zip(symbs, pstate)]
-    return [var.parameter => var.symbf(pstatesubs) for var in vars]
+    pstatesubs = Any[x => y for (x, y) in zip(symbs, pstate)]
+    varstosub = Dict(var.parameter => var.symbf for var in vars)
+
+    out = [] 
+    n = 1
+
+    while true
+        isempty(keys(varstosub)) && break
+        n > length(vars) && begin
+            error("Substitution of variables failed to resolve symbols $(collect(keys(varstosub))). This could result from unspecified parameter values or partially specified transitions.")
+        end
+
+        for key in keys(varstosub) 
+            # Substitute variable values in pstatesubs to variable expression. 
+            # If no symbolic variables add the var to pstatesubs and output.
+            # Keep iterating till no symbolic variables left.
+            val = varstosub[key](pstatesubs)
+            vs = Symbolics.get_variables(val)
+
+            isempty(vs) && begin
+                push!(pstatesubs, key => val)
+                push!(out, key => val)
+                pop!(varstosub, key)
+            end
+        end
+        n += 1
+    end
+    return out 
 end
 
 function replace_with_connection(exprs, cnx)
@@ -258,9 +286,9 @@ end
 struct Indexing{N}
     index::Int64
     parent::NTuple{N, Int64}
-    
+
     function Indexing(index, parent)
-        new{length(parent)}(index, parent)        
+        new{length(parent)}(index, parent)
     end
 end
 
