@@ -413,7 +413,7 @@ end
 function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters; 
     showprogress=true, 
     save_interactions=false,
-    remember_all_agents=false) 
+    trace_agents=false) 
 
     state, results, model = init_simulator(modeldef, init_pop, params)
     
@@ -451,7 +451,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
                 log_outstates!(srx, state, next_rx_time, new_agents, model, results)
 
                 # Add the new to the population state.
-                remember_all_agents && push_to_pop!(all_agents, deleted_agents)
+                trace_agents && push_to_pop!(all_agents, deleted_agents)
                 push_to_pop!(state.pop, new_agents)
 
                 # New reactions.
@@ -480,7 +480,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
             log_snapshot!(state.t, params.snapshot, state, model, results)
             results.tend = state.t
       
-            remember_all_agents && push_to_pop!(all_agents, state.pop)
+            trace_agents && push_to_pop!(all_agents, state.pop)
             results.agents = all_agents 
             results.final_pop = state.pop
             return results
@@ -492,7 +492,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
     log_snapshot!(state.t, params.snapshot, state, model, results)
     results.tend = state.t
 
-    remember_all_agents && push_to_pop!(all_agents, state.pop)
+    trace_agents && push_to_pop!(all_agents, state.pop)
     results.agents = all_agents 
     results.final_pop = state.pop
     return results
