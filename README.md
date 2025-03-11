@@ -63,7 +63,8 @@ init_pop = repeat([C => (τ => 0.0, s => 0.1)], 1)
 ps = [a => 0.5, L => 1.0, μ => 1.0, cv => 0.1]
 tspan = (0, 10.0)
 Δt = 1.0
-simulation_params = SimulationParameters(ps, tspan, Δt; snapshot=[PopulationSnapshot(C), ])
+simulation_params = SimulationParameters(ps, tspan, Δt; 
+    snapshot=[PopulationSnapshot(C), ])
 ```
 Simulate the system and display the population size snapshots.
 ```julia
