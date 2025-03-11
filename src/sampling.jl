@@ -12,19 +12,37 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
     return proposet
 end
 
-struct ExtrandeMethod{B, F}
+struct UnknownBound end
+struct IncreasingBound end
+struct DecreasingBound end
+struct SpecifiedBound end
+
+struct ExtrandeMethod{F, M}
     λmax::F
     L::Num
     trait_indep::Bool
     pop_indep::Bool
 end
 
-function ExtrandeMethod(L; trait_indep=false, pop_indep=false)
-    ExtrandeMethod{false,typeof(nothing)}(nothing, L, trait_indep, pop_indep)
+function ExtrandeMethod(L; trait_indep=false, pop_indep=false, boundtype=:unknown)
+    if boundtype == :unknown
+        error("Unknown bounds not yet implemented")
+#        return ExtrandeMethod{typeof(nothing),typeof(UnknownBound())}(nothing, L, trait_indep, pop_indep)
+    end
+
+    if boundtype == :increasing
+        return ExtrandeMethod{typeof(nothing),typeof(IncreasingBound())}(nothing, L, trait_indep, pop_indep)
+    end
+
+    if boundtype == :decreasing
+        return ExtrandeMethod{typeof(nothing),typeof(DecreasingBound())}(nothing, L, trait_indep, pop_indep)
+    end
+
+    error("Bound type not recognized. Valid options are :unknown, :increasing and :decreasing")
 end
 
 function ExtrandeMethod(λmax, L; trait_indep=false, pop_indep=false)
-    ExtrandeMethod{true,typeof(λmax)}(λmax, L, trait_indep, pop_indep)
+    ExtrandeMethod{typeof(λmax),typeof(SpecifiedBound())}(λmax, L, trait_indep, pop_indep)
 end
 
 Base.show(io::IO, sampler::ExtrandeMethod) = print(io, "Extrande method")
