@@ -32,7 +32,7 @@ der = Differential(t)
 
 # Age increases linearly in time t while size grows exponentially.  
 @named CellDynamics = ODESystem([der(τ) ~ 1.0, der(s) ~ a*s], t)
-Cell = AgentDynamics((CellDynamics,), ())
+Cell = AgentDynamics(CellDynamics, ())
 ```
 
 Define the division interaction dividing the cell and creating two daughter cells with half the size each. 
@@ -63,8 +63,7 @@ init_pop = repeat([C => (τ => 0.0, s => 0.1)], 1)
 ps = [a => 0.5, L => 1.0, μ => 1.0, cv => 0.1]
 tspan = (0, 10.0)
 Δt = 1.0
-simulation_params = SimulationParameters(ps, tspan, Δt, Tsit5();
-    snapshot=[PopulationSnapshot(C), ])
+simulation_params = SimulationParameters(ps, tspan, Δt; snapshot=[PopulationSnapshot(C), ])
 ```
 Simulate the system and display the population size snapshots.
 ```julia
