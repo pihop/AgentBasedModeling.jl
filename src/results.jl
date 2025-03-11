@@ -33,7 +33,7 @@ struct SaveOutStateTrait <: AbstractSaveTrait
     trait
 end
 
-struct TraitSnapshot <: AbstractSaveTrait
+struct StateSnapshot <: AbstractSaveTrait
     agent
     trait
 end

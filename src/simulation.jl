@@ -352,7 +352,7 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
         name = save_trait_name(save) 
 
         for agent in Iterators.flatten(values.(values(state.pop)))
-            if save isa TraitSnapshot 
+            if save isa StateSnapshot 
                 isa(model.traitdefs[agent.sym].dynamics, EmptyTraitProblem) && continue
                 !isequal(agent.sym, save.agent) && continue
                 push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
@@ -361,7 +361,7 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
             end 
         end
         
-        if save isa TraitSnapshot
+        if save isa StateSnapshot
             !haskey(results.snapshot, name) && begin 
                 results.snapshot[name] = DiffEqArray([snapshot, ], [time, ]) 
                 continue
