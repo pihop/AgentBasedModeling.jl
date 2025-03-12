@@ -13,8 +13,8 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
 end
 
 struct UnknownBound end
-struct IncreasingBound end
-struct DecreasingBound end
+struct IncreasingRate end
+struct DecreasingRate end
 struct SpecifiedBound end
 
 struct ExtrandeMethod{F, M}
@@ -26,12 +26,11 @@ end
 
 function ExtrandeMethod(L; trait_indep=false, pop_indep=false, boundtype=:unknown)
     if boundtype == :unknown
-        error("Unknown bounds not yet implemented")
-#        return ExtrandeMethod{typeof(nothing),typeof(UnknownBound())}(nothing, L, trait_indep, pop_indep)
+        return ExtrandeMethod{typeof(nothing),typeof(UnknownBound())}(nothing, L, trait_indep, pop_indep)
     end
 
     if boundtype == :increasing
-        return ExtrandeMethod{typeof(nothing),typeof(IncreasingBound())}(nothing, L, trait_indep, pop_indep)
+        return ExtrandeMethod{typeof(nothing),typeof(IncreasingRate())}(nothing, L, trait_indep, pop_indep)
     end
 
     if boundtype == :decreasing
