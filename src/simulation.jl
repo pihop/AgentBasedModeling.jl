@@ -269,12 +269,6 @@ function filter_rxs!(state::SimulationState, delagents)
     end
 end
 
-function update_trait_snapshot!(state::SimulationState)
-    for agent in Iterators.flatten(values.(values(state.pop))) 
-        update_trait_snapshot!(agent, state.t)
-    end
-end
-
 function update_dtime!(time, deleted, agents)
     for agent in deleted
         setfield!(agent, :dtime, time)
@@ -428,7 +422,6 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
 
     try 
         while true
-            update_trait_snapshot!(state)
             sample_aggregates!(state.srxs, state, model, params, (state.t, tend), recompute=recompute_bounds)
             next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
             rxidx = state.srxs[rx_channel].next_rx 

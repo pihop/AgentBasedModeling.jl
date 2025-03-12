@@ -489,14 +489,12 @@ let x = Threads.Atomic{Int}(0)
         btime::tType
         dtime::tType
         binteraction::biType
-        idx::Int64
         parents::pType
         srxs::Vector{Any}
         uid::UInt
         init_trait::inType
         consts::cType
         simulation::Union{Nothing, ODESolution, RODESolution}
-        trait_snapshot::Vector{Float64}
 
         function AgentState(btime::tType, sym::sType, init_trait::inType, consts::cType, parents::pType, binteraction::biType) where {tType, biType, sType, inType, cType, pType}
             atomic_add!(x,1)
@@ -506,14 +504,12 @@ let x = Threads.Atomic{Int}(0)
                 btime,
                 typemax(btime),
                 binteraction,
-                x.value,
                 parents,
                 Vector{Tuple{UInt, UInt}}(),
                 hash(sym, hash(x.value)),
                 init_trait,
                 consts,
-                nothing,
-                zeros(Float64, length(init_trait)))
+                nothing)
         end
     end
 end
@@ -522,16 +518,11 @@ Base.isequal(a::AgentState, b::AgentState) = isequal(a.uid, b.uid)
 getsim(agent::AgentState, t::Float64) = agent.simulation(t)
 getsymid(agent::AgentState) = (agent.sym, agent.uid) 
 
-function update_trait_snapshot!(agent::AgentState, t::Float64)
-    isnothing(agent.simulation) && return nothing
-    agent.trait_snapshot = agent.simulation(t; continuity = :right)
-end
-
 function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
     # pair = (Bool, Int) where pair[1] is whether the trait is constant and
     # pair[2] is the index of the trait in a simulation.
     pair[1] && return last(agent.consts[pair[2]])
-    return @inbounds agent.simulation(t)[pair[2]]
+    return @inbounds agent.simulation(t; continuity = :right)[pair[2]]
 end
 
 function Base.show(io::IO, agent::AgentState)
@@ -540,7 +531,6 @@ end
 
 get_sym(agent::AgentState) = agent.sym
 get_sym_string(agent::AgentState) = string(agent.sym.f)
-get_id(agent::AgentState) = agent.idx
 get_parents(agent::AgentState) = agent.parents
 get_birth(agent::AgentState) = agent.btime
 
