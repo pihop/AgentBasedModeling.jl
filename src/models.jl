@@ -123,6 +123,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
     ps = Symbolics.unwrap.(ps)
 
     pvec = Vector{Float64}(undef, length(ps))
+    # Symbol of param, index in the params vector, (index of substrate, trait sym, (isdiscrete, index in simulation))
     pmod = Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}[]
 
     for (i,p) in enumerate(ps)
@@ -489,6 +490,7 @@ let x = Threads.Atomic{Int}(0)
         btime::tType
         dtime::tType
         binteraction::biType
+        dinteraction::Union{UInt, Nothing}
         parents::pType
         srxs::Vector{Any}
         uid::UInt
@@ -504,6 +506,7 @@ let x = Threads.Atomic{Int}(0)
                 btime,
                 typemax(btime),
                 binteraction,
+                nothing,
                 parents,
                 Vector{Tuple{UInt, UInt}}(),
                 hash(sym, hash(x.value)),

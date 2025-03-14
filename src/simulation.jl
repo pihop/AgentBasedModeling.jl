@@ -191,14 +191,14 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, model::Popu
 
         isempty(new_traits) && begin
             # Early return for the agents with no traits.
-            agent_ = AgentState(time, agent, (), (), Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.pitx.itxdef.name)
+            agent_ = AgentState(time, agent, (), (), Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.uid)
             new[agent][agent_.uid] = agent_
             continue
         end
         alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
         tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
         c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
-        agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.pitx.itxdef.name)
+        agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.uid)
         new[agent][agent_.uid] = agent_
     end
     return new, substrates
@@ -269,9 +269,10 @@ function filter_rxs!(state::SimulationState, delagents)
     end
 end
 
-function update_dtime!(time, deleted, agents)
+function update_dtime!(time, srx, deleted, agents)
     for agent in deleted
         setfield!(agent, :dtime, time)
+        setfield!(agent, :dinteraction, srx.uid)
     end
 end
 
@@ -404,6 +405,11 @@ function init_simulator(modeldef, init_pop, params)
     return state, results, model
 end
 
+function save_interactions!(interactions, rxtime, srx, state)
+    agents = [(agent[2].sym, agent[1]) for agent in Iterators.flatten(values(state.pop))]
+    push!(interactions, (rxtime, srx, agents))
+end
+
 function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters; 
     showprogress=true, 
     save_interactions=false,
@@ -429,7 +435,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
             if next_rx_time < tend && rxidx != 0
                 srx = state.srxs[rx_channel].rxs[rxidx]
                 new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
-                update_dtime!(next_rx_time, deleted_agents, state.pop)
+                update_dtime!(next_rx_time, srx, deleted_agents, state.pop)
 
                 # Logging
                 log_instates!(srx, state, next_rx_time, deleted_agents, model, results)
@@ -450,7 +456,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
                 # New reactions.
                 make_reactions!(new_agents, state, model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
                 state.t = next_rx_time 
-                save_interactions && push!(results.interactions, (next_rx_time, srx, state.pop))
+                save_interactions && save_interactions!(results.interactions, next_rx_time, srx, state)
                 update_pop_state!(state, model)
             elseif next_rx_time < tend && rxidx == 0 
                 state.t = next_rx_time 
