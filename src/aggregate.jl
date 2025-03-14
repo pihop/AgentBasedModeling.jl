@@ -55,7 +55,8 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
     rx_ = first(rxs)
 
     pop = state.pop_state
-    @unpack pvec, pmod, subsrules = first(rxs).pitx
+        
+    @unpack pvec, pmod, subsrules = rx_.pitx
     ratefmax, Lf, ratef = get_bound_functions(aggregate, rx_, tspan)
 
     if aggregate.sampler.trait_indep 
@@ -139,7 +140,6 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
 end
 
 function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{T,BType},rxType,S}, state, model, params, tspan; recompute=true) where {rxType,T,S, BType}
-    # When bounds are given.
     rxs = values(aggregate.rxs)
     len = length(rxs)
 
@@ -173,7 +173,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{T,BType},rxTy
                 cur_rate += r 
             else 
                 cur_rate += 0.0 
-                @warn "Rate evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping.
+                @warn "Rate evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping 0.
                 If large negative values check the rate functions in the model are correctly specified."
             end
 
