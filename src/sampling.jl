@@ -72,14 +72,19 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
     while true
         last_prop = proposet
 
-        λmax = ratemax(state.pop_state, pvec, proposet)
-        looka = Lf(state.pop_state, pvec, proposet)
+        # Evaluate bound and lookahead at last proposed time.
+        λmax = ratemax(state.pop_state, pvec, last_prop)
+        looka = Lf(state.pop_state, pvec, last_prop)
 
+        # Propose a new time.
         proposet += randexp() / λmax 
 
         proposet > last_prop + looka && begin
+            # If outside the currently valid interval.
             proposet = last_prop + looka
+            # If the proposal outside the simulated timespan return Inf (no interaction).
             proposet ≥ tspan[end] && return Inf
+            # Else set state to the new time and keep sampling.
             pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
             continue
         end
@@ -90,10 +95,14 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
         pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
         λt = ratef(state.pop_state, pvec, proposet)
 
-        if λt > λmax  
-            @error "Bound evaluated as $(λmax) with rate evaluated as $(λt). $(ratef)"
+        # Catch misspecification of bounds.
+        λt > λmax && begin
+            @error "Bound evaluated as $(λmax) at time $(proposet) with rate evaluated as $(λt). $(ratef)"
             throw(BadRateBound) 
-        elseif (U*λmax ≤ λt) 
+        end
+
+        # Acceptance criterion.
+        if (U*λmax ≤ λt) 
             return proposet
         end
     end
