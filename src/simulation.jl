@@ -32,7 +32,7 @@ function update_sampler!(state::SimulationState, tspan)
     end
 end
 
-struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S}
+struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S,iType}
     ps::T
     tspan::Tuple{Float64, Float64}
     Δt::Float64
@@ -43,9 +43,23 @@ struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S}
     snapshot::S
     jitt::Float64
     maxpop::Float64
+    interpolation::iType
 
-    function SimulationParameters(ps::T, tspan, Δt, solver::DEAlg=Rodas4(); jitt=1e-4, maxpop=Inf, snapshot::S=[], jumpsolver=SSAStepper(), jumpaggregator::JAgg=Direct(), solverkws::K=()) where {DEAlg, JAgg<:JumpProcesses.AbstractAggregatorAlgorithm, T,K,S}
-        new{T,DEAlg,typeof(jumpsolver),JAgg,K,S}(ps, tspan, Δt, solver, jumpsolver, jumpaggregator, solverkws, snapshot, jitt, maxpop)
+    function SimulationParameters(
+        ps::T, 
+        tspan, 
+        Δt, 
+        solver::DEAlg=Rodas4(); 
+        jitt=1e-4, 
+        maxpop=Inf, 
+        snapshot::S=[], 
+        jumpsolver=SSAStepper(), 
+        jumpaggregator::JAgg=Direct(), 
+        interpolation=SciMLBase.LinearInterpolation,
+        solverkws::K=()) where {DEAlg, JAgg<:JumpProcesses.AbstractAggregatorAlgorithm, T,K,S}
+
+        new{T,DEAlg,typeof(jumpsolver),JAgg,K,S,typeof(interpolation)}(
+            ps, tspan, Δt, solver, jumpsolver, jumpaggregator, solverkws, snapshot, jitt, maxpop, interpolation)
     end
 end
 
@@ -100,20 +114,20 @@ function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType
     end
 end
 
-function simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model, kwargs...)
+function simulate_internal(problem, agent, init, tspan, params; model, kwargs...)
     prob = remake(problem, u0=init, tspan=tspan)
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
-        return solve(prob, jumpsolver; kwargs...), jumpsolver 
+        return solve(prob, params.jumpsolver; kwargs...), params.jumpsolver 
     else 
-        return solve(prob, solver; kwargs...), solver
+        return solve(prob, params.solver; kwargs...), params.solver
     end
 end
 
-function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
+function append_sim!(problem, agent, agentsim::Nothing, tspan, params; model)
     init = agent.init_trait
 
     sim, alg = simulate_internal(
-        problem, agent, init, (agent.btime, tspan[end]), ps, solver, jumpsolver; model=model)
+        problem, agent, init, (agent.btime, tspan[end]), params; model=model)
 
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
@@ -121,37 +135,36 @@ function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver, jumps
         sim.t, 
         sim.u, 
         successful_retcode=true,
-        interp = SciMLBase.ConstantInterpolation(sim.t, sim.u)
+        interp = params.interpolation(sim.t, sim.u)
        )
 end
 
-function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
+function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, params; model)
     nothing
 end
 
-function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution}, tspan, ps, solver, jumpsolver; model)
+function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution}, tspan, params; model)
     k_ = first.(agent.init_trait)
     init = Tuple(k_ .=> agent.simulation(tspan[1]; idxs=collect(k_)))
 
     tspan[2] == tspan[1] && return nothing
-    sim, alg = simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model=model)
+    sim, alg = simulate_internal(problem, agent, init, tspan, params; model=model)
     ts = [agentsim.t; sim.t]
-#    deduplicate_knots!(ts)
-#    Interpolations.deduplicate_knots!(ts)
+    Interpolations.deduplicate_knots!(ts)
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
         alg,
         ts, 
         [agentsim.u; sim.u], 
         successful_retcode=true,
-        interp = SciMLBase.ConstantInterpolation(ts, [agentsim.u; sim.u])
+        interp = params.interpolation(ts, [agentsim.u; sim.u])
        )
 end
 
 function simulate_traits!(pop, tstart, tend, params; model, kwargs...)
     for (uid,agent) in Iterators.flatten(values(pop))
         append_sim!(
-            model.traitprobs[agent.sym].problem, agent, agent.simulation, (tstart, tend), params.ps, params.solver, params.jumpsolver; model=model)
+            model.traitprobs[agent.sym].problem, agent, agent.simulation, (tstart, tend), params; model=model)
     end
 end
 
