@@ -75,7 +75,7 @@ function substitute_agent(subs, agents, pop, model)
 end
 
 function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType, params::pType; make_zero_substrate_rx=true) where {aType, sType, mType, tType, pType}
-    # Construct pairs of agents that can take part in a reaction.
+    # Construct collections of agents that can take part in a reaction.
     # Make a dict of agents => rn_sym.
     for rx in model.rxs
         method = rx.itxdef.rx.method
@@ -101,8 +101,7 @@ function make_reactions!(agents::aType, state::sType, model::mType, tspan::tType
 end
 
 function simulate_internal(problem, agent, init, tspan, ps, solver, jumpsolver; model, kwargs...)
-    u0 = [Symbolics.unwrap.(substitute(p, Dict(init...))) for p in unknowns(model.traitdefs[agent.sym].dynamics)]
-    prob = remake(problem, u0=Float64.(u0), tspan=tspan)
+    prob = remake(problem, u0=init, tspan=tspan)
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
         return solve(prob, jumpsolver; kwargs...), jumpsolver 
     else 
@@ -112,6 +111,7 @@ end
 
 function append_sim!(problem, agent, agentsim::Nothing, tspan, ps, solver, jumpsolver; model)
     init = agent.init_trait
+
     sim, alg = simulate_internal(
         problem, agent, init, (agent.btime, tspan[end]), ps, solver, jumpsolver; model=model)
 
