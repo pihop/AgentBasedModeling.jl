@@ -103,12 +103,12 @@ end
 
 SciMLBase.interp_summary(::T) where T <: Interpolations.Extrapolation = "Linear Interpolation"
 
-function lineage(res, cell)
+function lineage(res, cell; ncells=Inf)
     # Trace the lineage of an agent assuming unique parent at each interaction.  
-    lin = [] 
+    lin = Any[cell, ] 
     isempty(cell.parents) && return [cell, ]
     cell_ = cell.parents[1]
-    while true 
+    while length(lin) < ncells 
         savecell_ = res.agents[cell_[1]][cell_[2]]
         push!(lin, savecell_)
         isempty(savecell_.parents) && return reverse(lin)
