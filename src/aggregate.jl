@@ -94,7 +94,7 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
         else 
             aggregate.Bmax += 0.0 
             @warn "Rate bound evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping.
-            If large negative values check the bound functions in the model are correctly specified."
+            If large negative values check the bound functions in the model are correctly specified." maxlog=3
         end
     end
 end
@@ -174,7 +174,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{T,BType},rxTy
             else 
                 cur_rate += 0.0 
                 @warn "Rate evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping 0.
-                If large negative values check the rate functions in the model are correctly specified."
+                If large negative values check the rate functions in the model are correctly specified." maxlog=3
             end
 
             if cur_rate ≥ UBmax
@@ -217,7 +217,7 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
             cumsum[idx] = prevsum + r
         else 
             push!(rates, 0.0)
-            @warn "Rate evaluated to $r < 0. Assuming 0 but make sure rate functions are correctly specified."
+            @warn "Rate evaluated to $r < 0. Assuming 0 but make sure rate functions are correctly specified." maxlog=3
         end
         prevsum = cumsum[idx]
         idx += 1
@@ -247,7 +247,7 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S
     @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
     sampler = first(rxs).sampler
 
-    for rx in rxs 
+    for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         reaction_time = sample_first_arrival(
             ratef, pop, pvec, pmod, subsrules, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=Lf)
