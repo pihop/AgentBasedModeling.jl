@@ -1,4 +1,3 @@
-using ModelingToolkit
 using Catalyst
 
 @independent_variables t 

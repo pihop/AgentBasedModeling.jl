@@ -1,4 +1,3 @@
-using ModelingToolkit
 using Catalyst
 using StatsBase
 
