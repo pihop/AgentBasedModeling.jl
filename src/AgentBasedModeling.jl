@@ -10,13 +10,14 @@ module AgentBasedModeling
     using SymbolicUtils
     using OrdinaryDiffEq
 
-    using ModelingToolkit
-    import ModelingToolkit: value, get_variables!, get_iv, get_unknowns
-    MT = ModelingToolkit
+#    using ModelingToolkit
+    import Catalyst: value, get_variables!, get_iv, get_unknowns
+    MT = Catalyst.ModelingToolkit
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools
     using JumpProcesses
+    import JumpProcesses: extend_problem
 
     using StatsBase
     using ProgressMeter
