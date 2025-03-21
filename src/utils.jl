@@ -41,18 +41,31 @@ end
 # Stuff below will be deleted once hybrid systems are supported by Catalyst.jl. 
 function get_time_dependent_vars(eqs)
     vars = Set()
+    discvars = Set()
 
-    for eq in eqs
-        isequal(eq.rhs, 0.0) && continue
-        if isequal(eq.lhs, 0)
-            vs = get_variables(eq)
-            display(vs)
-#            display(ModelingToolkit.isparameter(vs[2]))
-#            display(ModelingToolkit.getvariabletype(eq.rhs))
-        else
-            push!(vars, eq.lhs.arguments)
+    diffeqs = filter(x -> isdiffeq(x), eqs)
+    nondiffeqs = filter(x -> !isdiffeq(x), eqs)
+
+    for eq in diffeqs
+        # If rhs 0 then we only have discrete jumps corresponding to the variable.
+        vs = get_variables(eq)
+        isequal(eq.rhs, 0.0) && begin
+            push!(discvars, vs...)
+            continue
         end
+        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        push!(vars, vs_topush...)
+
     end
+
+    for eq in nondiffeqs
+        vs = get_variables(eq)
+        # Are any of the variables continuous?
+        anyvars = any(x -> !in(x, vars), vs)
+        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        push!(vars, vs_topush)
+    end
+
     vars
 end
 
@@ -130,4 +143,41 @@ function get_depgraph_temp(rs)
     jdeps = asgraph(rs; eqs)
     vdeps = variable_dependencies(rs; eqs)
     eqeq_dependencies(jdeps, vdeps).fadjlist
+end
+
+function extend_problem(prob::DiffEqBase.SDEProblem, jumps; rng = DEFAULT_RNG)
+    # Modify the extend problem to avoid remake. Remake for SDEProblems seems broken in JumpProceses.
+    _f = SciMLBase.unwrapped_f(prob.f)
+
+    if isinplace(prob)
+        jump_f = let _f = _f
+            function (du::ExtendedJumpArray, u::ExtendedJumpArray, p, t)
+                _f(du.u, u.u, p, t)
+                JumpProcesses.update_jumps!(du, u, p, t, length(u.u), jumps...)
+            end
+        end
+    else
+        jump_f = let _f = _f
+            function (u::ExtendedJumpArray, p, t)
+                du = ExtendedJumpArray(_f(u.u, p, t), u.jump_u)
+                JumpProcesses.update_jumps!(du, u, p, t, length(u.u), jumps...)
+                return du
+            end
+        end
+    end
+
+    if prob.noise_rate_prototype === nothing
+        jump_g = function (du, u, p, t)
+            prob.g(du.u, u.u, p, t)
+        end
+    else
+        jump_g = function (du, u, p, t)
+            prob.g(du, u.u, p, t)
+        end
+    end
+
+    u0 = JumpProcesses.extend_u0(prob, length(jumps), rng)
+    f = SDEFunction{isinplace(prob)}(jump_f, jump_g; sys = prob.f.sys,
+        observed = prob.f.observed)
+    SDEProblem(f, prob.g, u0, prob.tspan, prob.p; prob.kwargs...)
 end

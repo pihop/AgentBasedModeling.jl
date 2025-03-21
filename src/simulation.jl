@@ -121,7 +121,7 @@ function simulate_internal(problem, agent, init, tspan, params; model, kwargs...
 
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
         return solve(prob, params.jumpsolver; kwargs...), params.jumpsolver 
-    else 
+    else
         return solve(prob, params.solver; kwargs...), params.solver
     end
 end

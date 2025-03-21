@@ -402,87 +402,51 @@ function make_hybrid(rs, init, tspan, params;
     return JumpProblem(jprob)
 end
 
-function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
+
+function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params; 
+        jumpaggregator, 
+        name = nameof(hdyn.discrete),
+        checks = false,
+        combinatoric_ratelaws=Catalyst.get_combinatoric_ratelaws(hdyn.discrete),
+        include_zero_odes=true)
+    
     # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
-    eqs = equations(trait.continuous)
-    rxs = reactions(trait.discrete)  
+    eqs = equations(hdyn.continuous)
+    rxs = reactions(hdyn.discrete)  
 
     @named rs = ReactionSystem(
         [rxs; eqs], 
-        ModelingToolkit.get_iv(trait.discrete), 
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
-        first.(ps))
+        ModelingToolkit.get_iv(hdyn.discrete), 
+        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(hdyn)),
+        first.(params))
 
-#    jsys = convert(JumpSystem,  complete(rs))
     @named sde = SDESystem(
         eqs,
-        vcat(trait.continuous.noiseeqs...),
-        ModelingToolkit.get_iv(trait.continuous),
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
-        first.(ps))
-
-    oprob = SDEProblem(complete(sde), init, tspan, ps;) 
-#
-#    jumps = Catalyst.assemble_jumps(rs)
+        vcat(hdyn.continuous.noiseeqs...),
+        ModelingToolkit.get_iv(hdyn.continuous),
+        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(rs)),
+        first.(params))
 
     flatrs = Catalyst.flatten(rs)
     eqs = Any[assemble_hybrid_jumps(flatrs)...]
-#    ists, ispcs = Catalyst.get_indep_sts(flatrs)
-#    eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
-#        remove_conserved = false)
-#
-#    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
-#            observed = obs,
-#            name,
-#            defaults = MT._merge(Dict(), MT.defaults(flatrs)),
-#            checks,
-#            discrete_events = MT.discrete_events(flatrs),
-#            continuous_events = MT.continuous_events(flatrs),)
-#
-#    u0map = symmap_to_varmap(rs, init)
-#    pmap = symmap_to_varmap(rs, params)
-#
-#    prob = SDEProblem(complete(jsys), u0map, tspan, pmap; )
-#    jprob = JumpInputs(complete(jsys), prob)
+    ists, ispcs = Catalyst.get_indep_sts(flatrs)
+    _, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
+        remove_conserved = false)
 
-#    flatrs = Catalyst.flatten(rs)
-#    sts, ispcs = Catalyst.get_indep_sts(flatrs)
-#    ps = Catalyst.get_ps(flatrs)
-#
-#    jsys = convert(JumpSystem, complete(rs))
-#    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
+    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
+        observed = obs,
+        name,
+        defaults = MT._merge(Dict(), MT.defaults(flatrs)),
+        checks,
+        discrete_events = MT.discrete_events(flatrs),
+        continuous_events = MT.continuous_events(flatrs),)
+
+    u0map = symmap_to_varmap(rs, init)
+    pmap = symmap_to_varmap(rs, params)
+
+    prob = SDEProblem(complete(sde), u0map, tspan, pmap;)
+    JumpProblem(complete(jsys), prob, jumpaggregator)
 end
-
-#function make_hybrid(trait::HybridSDEDynamics, init, tspan, ps; jumpaggregator)
-#    # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
-#    eqs = equations(trait.continuous)
-#    rxs = reactions(trait.discrete)  
-#    display(eqs)
-#
-#    @named rs = ReactionSystem(
-#        [rxs; eqs], 
-#        ModelingToolkit.get_iv(trait.discrete), 
-#        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
-#        first.(ps))
-#
-##    jsys = convert(JumpSystem,  complete(rs))
-#    @named sde = SDESystem(
-#        eqs,
-#        vcat(trait.continuous.noiseeqs...),
-#        ModelingToolkit.get_iv(trait.continuous),
-#        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(trait)),
-#        first.(ps))
-#
-#    oprob = SDEProblem(complete(sde), init, tspan, ps;) 
-#
-#    jumps = Catalyst.assemble_jumps(rs)
-#    flatrs = Catalyst.flatten(rs)
-#    sts, ispcs = Catalyst.get_indep_sts(flatrs)
-#    ps = Catalyst.get_ps(flatrs)
-#
-#    jsys = convert(JumpSystem, complete(rs))
-#    JumpProblem(complete(jsys), oprob, jumpaggregator; save_positions=(true, true))
-#end
 
 let x = Threads.Atomic{Int}(0)
     mutable struct AgentState{tType, biType, sType, pType, inType, cType}
