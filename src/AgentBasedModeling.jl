@@ -2,6 +2,7 @@ module AgentBasedModeling
 
     using Catalyst
     import Catalyst: get_rxs, drop_dynamics, get_depgraph, dfs_mark!, makemajump
+    import Catalyst: value, get_variables!, get_iv, get_unknowns
     using MacroTools
 
     import JumpProcesses: JumpProblem
@@ -11,8 +12,7 @@ module AgentBasedModeling
     using OrdinaryDiffEq
 
 #    using ModelingToolkit
-    import Catalyst: value, get_variables!, get_iv, get_unknowns
-    MT = Catalyst.ModelingToolkit
+    MT = ModelingToolkit
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools
