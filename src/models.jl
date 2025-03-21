@@ -413,38 +413,31 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
     # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
     eqs = equations(hdyn.continuous)
     rxs = reactions(hdyn.discrete)  
+    ps_set = Set(vcat(parameters(hdyn.continuous), parameters(hdyn.discrete)))
 
     @named rs = ReactionSystem(
         [rxs; eqs], 
         ModelingToolkit.get_iv(hdyn.discrete), 
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(hdyn)),
-        first.(params))
+        ps_set)
 
     @named sde = SDESystem(
         eqs,
         vcat(hdyn.continuous.noiseeqs...),
         ModelingToolkit.get_iv(hdyn.continuous),
         filter(x -> !ModelingToolkit.isbrownian(x), unknowns(rs)),
-        first.(params))
+        ps_set)
 
-    flatrs = Catalyst.flatten(rs)
-    eqs = Any[assemble_hybrid_jumps(flatrs)...]
-    ists, ispcs = Catalyst.get_indep_sts(flatrs)
-    _, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
-        remove_conserved = false)
+    eqs = Any[assemble_hybrid_jumps(rs)...]
+    ists, ispcs = Catalyst.get_indep_sts(rs)
+    _, us, ps, obs, defs = Catalyst.addconstraints!(eqs, rs, ists, ispcs; remove_conserved = false)
 
-    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
-        observed = obs,
-        name,
-        defaults = MT._merge(Dict(), MT.defaults(flatrs)),
-        checks,
-        discrete_events = MT.discrete_events(flatrs),
-        continuous_events = MT.continuous_events(flatrs),)
+    jsys = JumpSystem(eqs, get_iv(rs), us, ps; name)
 
-    u0map = symmap_to_varmap(rs, init)
-    pmap = symmap_to_varmap(rs, params)
+    u0map = symmap_to_varmap(sde, init)
+    pmap = symmap_to_varmap(sde, params)
 
-    prob = SDEProblem(complete(sde), u0map, tspan, pmap;)
+    prob = SDEProblem(complete(sde), u0map, tspan, pmap)
     JumpProblem(complete(jsys), prob, jumpaggregator)
 end
 
