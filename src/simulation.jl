@@ -117,7 +117,8 @@ end
 function simulate_internal(problem, agent, init, tspan, params; model, kwargs...)
     unk = unknowns(model.traitdefs[agent.sym].dynamics)
     u0map = ModelingToolkit.varmap_to_vars(init, unk)
-    prob = remake(problem, u0=u0map, tspan=tspan)
+
+    prob = remake(problem; u0 = unk .=> u0map, tspan=tspan)
 
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
         return solve(prob, params.jumpsolver; kwargs...), params.jumpsolver 
