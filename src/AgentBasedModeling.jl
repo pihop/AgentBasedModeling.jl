@@ -24,9 +24,9 @@ module AgentBasedModeling
     using Random
     using CommonSolve 
     using Interpolations
-    import Interpolations: scale
+#    import Interpolations: scale
 
-    using InteractiveUtils
+#    using InteractiveUtils
     using Base.Threads
     
     const idType = UInt
