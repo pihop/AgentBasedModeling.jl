@@ -5,25 +5,26 @@ module AgentBasedModeling
     import Catalyst: value, get_variables!, get_iv, get_unknowns
     using MacroTools
 
-    import JumpProcesses: JumpProblem
+    using JumpProcesses
+    import JumpProcesses: JumpProblem, extend_problem
     using Symbolics
     import Symbolics: Symbolic
     using SymbolicUtils
     using OrdinaryDiffEq
+    using StochasticDiffEq
 
 #    using ModelingToolkit
     MT = ModelingToolkit
     using SciMLBase 
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools
-    using JumpProcesses
-    import JumpProcesses: extend_problem
 
     using StatsBase
     using ProgressMeter
     using Random
     using CommonSolve 
     using Interpolations
+    using Accessors
 #    import Interpolations: scale
 
 #    using InteractiveUtils

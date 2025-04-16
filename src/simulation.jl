@@ -120,9 +120,9 @@ function simulate_internal(problem, agent, init, tspan, params; model, kwargs...
     prob = remake(problem, u0=u0map, tspan=tspan)
 
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
-        return solve(prob, params.jumpsolver; kwargs...), params.jumpsolver 
+        return solve(prob, params.jumpsolver; params.solverkws...), params.jumpsolver 
     else
-        return solve(prob, params.solver; kwargs...), params.solver
+        return solve(prob, params.solver; params.solverkws...), params.solver
     end
 end
 
@@ -132,14 +132,7 @@ function append_sim!(problem, agent, agentsim::Nothing, tspan, params; model)
     sim, alg = simulate_internal(
         problem, agent, init, (agent.btime, tspan[end]), params; model=model)
 
-    agent.simulation = SciMLBase.build_solution(
-        sim.prob, 
-        alg,
-        sim.t, 
-        sim.u, 
-        successful_retcode=true,
-        interp = params.interpolation(sim.t, sim.u)
-       )
+    agent.simulation = sim
 end
 
 function append_sim!(::EmptyTraitProblem, agent, agentsim::Nothing, tspan, params; model)
@@ -152,16 +145,35 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
 
     tspan[2] == tspan[1] && return nothing
     sim, alg = simulate_internal(problem, agent, init, tspan, params; model=model)
+
     ts = [agentsim.t; sim.t]
     Interpolations.deduplicate_knots!(ts)
+    us = [agentsim.u; sim.u]
+
+    interp = sim.interp
+
+    interp isa OrdinaryDiffEq.InterpolationData &&  begin
+        ks = [agentsim.interp.ks; sim.interp.ks]
+        interp = setproperties(interp, (timeseries = us, ts = ts, ks = ks)) 
+    end
+    
+    interp isa StochasticDiffEq.LinearInterpolationData &&  begin
+        interp = setproperties(interp, (u = us, t = ts)) 
+    end
+
+    (interp isa SciMLBase.LinearInterpolation) || (interp isa SciMLBase.ConstantInterpolation) && begin
+        interp = setproperties(interp, (u = us, t = ts)) 
+    end
+
     agent.simulation = SciMLBase.build_solution(
         sim.prob, 
         alg,
         ts, 
-        [agentsim.u; sim.u], 
+        us, 
         successful_retcode=true,
-        interp = params.interpolation(ts, [agentsim.u; sim.u])
-       )
+        dense=sim.dense,
+        dense_errors=sim.dense,
+        interp = interp)
 end
 
 function simulate_traits!(pop, tstart, tend, params; model, kwargs...)
