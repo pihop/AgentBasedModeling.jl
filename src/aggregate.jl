@@ -232,8 +232,59 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
     end
 end
 
-function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S}
+function get_bound_functions(aggregate::PopulationItxAggregator{FirstReactionMethod{F,SpecifiedBound},rxType,S}, rx::R, tspan::T) where {F, rxType, S, R, T}
+    # Bound evaluated as ratefmax at the start of tspan.
+    @unpack ratefmax, Lf, ratef = rx.pitx
+    return ratefmax, Lf, ratef
+end
+
+function get_bound_functions(aggregate::PopulationItxAggregator{FirstReactionMethod{F,IncreasingRate},rxType,S}, rx::R, tspan::T) where {F, rxType, S, R, T}
+    # Bound evaluated as rate at the end of tspan.
+    @unpack ratefmax, Lf, ratef = rx.pitx
+    return ratef, Lf, ratef
+end
+
+function get_bound_functions(aggregate::PopulationItxAggregator{FirstReactionMethod{F,DecreasingRate},rxType,S}, rx::R, tspan::T) where {F, rxType, S, R, T}
+    # Bound evaluated as rate at the start of tspan.
+    @unpack ratefmax, Lf, ratef = rx.pitx
+    return ratef, Lf, ratef
+end
+
+function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, Btype}, rxType, S}, state, model, params, tspan; kwargs...) where {rxType,S, Btype <: Union{SpecifiedBound, IncreasingRate, DecreasingRate}, F}
     rxs = values(aggregate.rxs)
+    rx_ = first(rxs)
+
+    next_rx = 0
+    next_rx_time = Inf
+
+    aggregate.next_rx = next_rx
+    aggregate.next_rx_time = next_rx_time 
+
+    isempty(rxs) && return nothing
+
+    pop = state.pop_state
+    @unpack pvec, pmod, subsrules = rx_.pitx
+#    @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
+    ratefmax, Lf, ratef = get_bound_functions(aggregate, rx_, tspan)
+    sampler = first(rxs).sampler
+
+    for rx in rxs
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+        reaction_time = sample_first_arrival(
+            ratef, pop, pvec, pmod, subsrules, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=Lf)
+        reaction_time < next_rx_time && begin
+            next_rx_time = reaction_time
+            next_rx = rx.uid
+        end
+    end
+
+    aggregate.next_rx = next_rx
+    aggregate.next_rx_time = next_rx_time 
+end
+
+function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, UnknownBound},rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S,F}
+    rxs = values(aggregate.rxs)
+    rx_ = first(rxs)
 
     next_rx = 0
     next_rx_time = Inf
@@ -249,8 +300,23 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod,rxType,S
 
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
+
+        # All times recorded in the simulations.
+        ts = Set(reduce(vcat, [sub.simulation.t for sub in substrates]))
+        B = 0.0
+        for t in ts
+            t < tspan[1] && continue 
+            t > tspan[2] && continue # These times outside sampling interval.
+
+            pstate!(pmod, pvec, subsrules, model, substrates, state, t)
+            rB = ratef(pop, pvec, t) 
+            if rB > B
+                B = rB
+            end
+        end
+
         reaction_time = sample_first_arrival(
-            ratef, pop, pvec, pmod, subsrules, substrates, state, tspan, sampler, model; ratemax=ratefmax, Lf=Lf)
+            ratef, pop, pvec, pmod, subsrules, substrates, state, tspan, sampler, model; ratemax=(args...) -> B, Lf=Lf)
         reaction_time < next_rx_time && begin
             next_rx_time = reaction_time
             next_rx = rx.uid

@@ -49,15 +49,31 @@ Base.show(io::IO, sampler::ExtrandeMethod) = print(io, "Extrande method")
 get_λmax(s::ExtrandeMethod) = s.λmax
 get_L(s::ExtrandeMethod) = s.L
 
-struct FirstReactionMethod
-    λmax::Num
+struct FirstReactionMethod{F, M}
+    λmax::F
     L::Num
     trait_indep::Bool
     pop_indep::Bool
-    
-    function FirstReactionMethod(λmax, L; trait_indep=false, pop_indep=false)
-        new(λmax, L, trait_indep, pop_indep)
+end
+
+function FirstReactionMethod(L; trait_indep=false, pop_indep=false, boundtype=:unknown)
+    if boundtype == :unknown
+        return FirstReactionMethod{typeof(nothing),typeof(UnknownBound())}(nothing, L, trait_indep, pop_indep)
     end
+
+    if boundtype == :increasing
+        return FirstReactionMethod{typeof(nothing),typeof(IncreasingRate())}(nothing, L, trait_indep, pop_indep)
+    end
+
+    if boundtype == :decreasing
+        return FirstReactionMethod{typeof(nothing),typeof(DecreasingBound())}(nothing, L, trait_indep, pop_indep)
+    end
+
+    error("Bound type not recognized. Valid options are :unknown, :increasing and :decreasing")
+end
+
+function FirstReactionMethod(λmax, L; trait_indep=false, pop_indep=false)
+    FirstReactionMethod{typeof(λmax), typeof(SpecifiedBound())}(λmax, L, trait_indep, pop_indep)
 end
 
 Base.show(io::IO, sampler::FirstReactionMethod) = print(io, "First reaction method")
