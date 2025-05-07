@@ -25,9 +25,10 @@ module AgentBasedModeling
     using CommonSolve 
     using Interpolations
     using Accessors
-#    import Interpolations: scale
 
-#    using InteractiveUtils
+    using Graphs
+    using MetaGraphsNext
+
     using Base.Threads
     
     const idType = UInt
@@ -37,6 +38,7 @@ module AgentBasedModeling
     include("utils.jl")
     include("results.jl")
     export population_counts, SaveSubstrateTrait, SaveProductTrait, StateSnapshot, PopulationSnapshot
+    export construct_interaction_graph
 
     include("models.jl")
     export AgentDynamics, AgentState, AgentsModel, ParameterCnx, AgeConnection, Variable, TraitTransition, PopulationItx
