@@ -73,5 +73,4 @@ res.snapshot[:C]
 ```
 
 The package is flexible --- see the following for more complex examples!
-* [SIR model with incubation periods](https://github.com/pihop/AgentBasedModeling.jl/tree/main/examples/sir).
-* [Cell population with gene expression coupled to growth and division.](https://github.com/pihop/AgentBasedModeling.jl/tree/main/examples/sizecontrol)
+* [Cell population with gene expression coupled to growth and division.](https://pihop.github.io/AgentBasedModeling.jl/sizecontrol/sizecontrol_notebook.html)
