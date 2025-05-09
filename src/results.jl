@@ -117,7 +117,7 @@ function lineage(res, cell; ncells=Inf)
     return reverse(lin)
 end
 
-function construct_interaction_graph(results)
+function construct_interaction_graph(results; agent_filter = [] )
     graph = MetaGraph(
         Graphs.SimpleDiGraph();
         label_type=UInt,
@@ -131,6 +131,7 @@ function construct_interaction_graph(results)
 
     for agent in last.(collect(Iterators.flatten(values(results.agents))))
         isnothing(agent.dinteraction) && continue
+        in(agent.sym, Set(agent_filter)) && continue
         graph[agent.binteraction, agent.dinteraction] = agent
     end
     return graph
