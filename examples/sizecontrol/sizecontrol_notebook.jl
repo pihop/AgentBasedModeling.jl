@@ -20,6 +20,9 @@ begin
 		Pkg.PackageSpec(name="StatsBase"),
 		Pkg.PackageSpec(name="Integrals"),
 		Pkg.PackageSpec(name="Interpolations"),
+		Pkg.PackageSpec(name="Graphs"),
+		Pkg.PackageSpec(name="MetaGraphsNext"),
+		Pkg.PackageSpec(name="NetworkLayout"),
 		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
     ])
 	using OrdinaryDiffEq
@@ -31,6 +34,9 @@ begin
 	using CairoMakie
 	using StatsBase
 	using Integrals
+	using Graphs
+	using MetaGraphsNext
+	using NetworkLayout
 	using Interpolations
 	using ColorSchemes
 end;
@@ -203,7 +209,7 @@ Run the simulation.
 
 # ╔═╡ e54d3fa5-098b-4010-95fc-78548c4ce9c8
 # ╠═╡ show_logs = false
-res = simulate(model, initial_population, params; trace_agents=true);
+res = simulate(model, initial_population, params; trace_agents=true, save_interactions=true);
 
 # ╔═╡ b489fcfc-3759-4f64-aaec-ecae94ac1c3f
 md"""
@@ -489,6 +495,73 @@ begin
 	fig_traj
 end
 
+# ╔═╡ c4549ac3-c826-4caa-864d-835e43a459fd
+md"""
+Finally, lets produce a visualisation of the interaction graph where nodes represent interactions and edges agents.
+"""
+
+# ╔═╡ 9feec140-a725-4253-ab69-c13b8f2454f8
+md"""
+Helper functions for extracting the protein counts and constructing the x, y coordinates of vertices. 
+"""
+
+# ╔═╡ ec3e1785-7e29-4d27-9572-c9397fa630ff
+begin
+	function edge_data(graph, edge)
+	    vlabels = graph.vertex_labels
+	    agent = graph.edge_data[vlabels[edge.src], vlabels[edge.dst]]
+	    ts = range(agent.btime, stop=agent.dtime, length=10) 
+	    return agent.simulation(ts; idxs=p).u
+	end
+	
+	function make_layout(graph)
+	    meta = [graph.vertex_properties[uid][2] for uid in labels(graph)]
+	    buch = NetworkLayout.buchheim(adjacency_matrix(graph))
+	
+	    xs = getindex.(meta, 2)
+	    ys = getindex.(buch, 1)
+	    return Point.(zip(xs, ys))
+	end
+end;
+
+# ╔═╡ 1736b534-6f00-43bb-bcfc-897a132c9b52
+md"""
+Using the ```construct_interaction_graph``` from ```AgentBasedModeling.jl``` to construct the graph.
+"""
+
+# ╔═╡ dee1cc50-90f5-48fd-96bc-fb0c611e7c3f
+itx_graph = construct_interaction_graph(res);
+
+# ╔═╡ 31e98d17-23a5-4fc8-b109-281c8545abde
+md"""
+Plotting.
+"""
+
+# ╔═╡ 2fad00bd-69d5-4420-897b-e29b809f563d
+begin	
+	fig_tree = Figure(size=(300, 80) .* pt_cm; fontsize=8, pt_per_unit=1)
+	ax = Axis(fig_tree[1,2], xlabel="Time")
+	hidedecorations!.(fig_tree.content, ticks = false, label = false, ticklabels=false)
+	hideydecorations!.(fig_tree.content)
+	hidespines!.(fig_tree.content, :t, :r, :l) 
+	
+	layout = make_layout(itx_graph)
+	
+	for edge in edges(itx_graph)
+		data_ = edge_data(itx_graph, edge)
+		src_ = edge.src 
+    	dst_ = edge.dst 
+	
+	    lines!(ax, [layout[src_], layout[dst_]]; color=data_, colorrange=(10.0, 60.0), colormap=range(colors[7], stop=colors[1], length=10), linewidth=2)
+	end
+	scatter!(ax, layout; color=:black, markersize=5)
+	xlims!(ax, high=3.7)
+	
+	Colorbar(fig_tree[1, 1], limits = (10, 60), colormap=range(colors[7], stop=colors[1], length=10), flipaxis = false, label="Protein counts")
+	resize_to_layout!(fig)
+	fig_tree;
+end
+
 # ╔═╡ Cell order:
 # ╟─4e3e20d3-d152-4c26-a1f8-a0f4d11cf025
 # ╟─696a96c3-3499-41a7-a045-ec5d55806319
@@ -532,3 +605,10 @@ end
 # ╠═14bf24fc-5339-4531-8388-fc3d1e640c9d
 # ╟─e1c44637-92e8-4d9c-b10b-0e91cbc39e69
 # ╠═eb66a606-b38f-4044-b772-436755d430d5
+# ╟─c4549ac3-c826-4caa-864d-835e43a459fd
+# ╟─9feec140-a725-4253-ab69-c13b8f2454f8
+# ╠═ec3e1785-7e29-4d27-9572-c9397fa630ff
+# ╟─1736b534-6f00-43bb-bcfc-897a132c9b52
+# ╠═dee1cc50-90f5-48fd-96bc-fb0c611e7c3f
+# ╟─31e98d17-23a5-4fc8-b109-281c8545abde
+# ╠═2fad00bd-69d5-4420-897b-e29b809f563d
