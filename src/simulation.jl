@@ -376,9 +376,16 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
 
         for agent in Iterators.flatten(values.(values(state.pop)))
             if save isa StateSnapshot 
-                isa(model.traitdefs[agent.sym].dynamics, EmptyTraitProblem) && continue
                 !isequal(agent.sym, save.agent) && continue
-                push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
+                if in(save.trait, Set(unknowns(model.traitdefs[agent.sym].dynamics)))
+                    push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
+                end
+
+                constsyms = first.(model.traitdefs[agent.sym].constants)
+                if in(save.trait, Set(constsyms))
+                    idx = indexof(save.trait, constsyms)
+                    push!(snapshot, agent.consts[idx][2])
+                end
             elseif save isa PopulationSnapshot
                 isequal(agent.sym, save.agent) ? push!(snapshot_n, agent.sym) : nothing
             end 
@@ -427,8 +434,8 @@ function init_simulator(modeldef, init_pop, params)
     results = SimulationResults(modeldef; snapshot=params.snapshot)
     update_pop_state!(state, model)
 
-    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=model)
-    make_reactions!(state.pop, state, model, (state.t, state.t + params.Δt), params)
+#    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=model)
+#    make_reactions!(state.pop, state, model, (state.t, state.t + params.Δt), params)
 
     return state, results, model
 end
@@ -444,7 +451,10 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
     trace_agents=false) 
 
     state, results, model = init_simulator(modeldef, init_pop, params)
-    
+
+    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=model)
+    make_reactions!(state.pop, state, model, (state.t, state.t + params.Δt), params)
+
     showprogress && begin
         progress = ProgressUnknown()
     end
@@ -498,7 +508,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
             pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
             state.t ≥ params.tspan[end] && break
             pop_size ≥ params.maxpop && break
-            
+
             showprogress && ProgressMeter.next!(progress, showvalues = [("Time", state.t), ("Populations size", pop_size)])
         end
     catch e
@@ -506,7 +516,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
             println("Simulation interrupted! Saving results.")
             log_snapshot!(state.t, params.snapshot, state, model, results)
             results.tend = state.t
-      
+
             trace_agents && push_to_pop!(all_agents, state.pop)
             results.agents = all_agents 
             results.final_pop = state.pop

@@ -43,11 +43,11 @@ struct PopulationSnapshot <: AbstractSaveTrait
 end
 
 function save_trait_name(strait::AbstractSaveTrait)
-    Symbol(strait.agent.val.f, strait.trait.val.f)
+    Symbol(tosymbol(strait.agent, escape=false), tosymbol(strait.trait, escape=false))
 end
 
 function save_trait_name(strait::PopulationSnapshot)
-    Symbol(strait.agent.val.f)
+    tosymbol(strait.agent, escape=false)
 end
 
 struct TraitValue{V,T}
