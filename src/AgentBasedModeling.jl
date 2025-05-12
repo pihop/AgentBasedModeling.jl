@@ -53,7 +53,7 @@ module AgentBasedModeling
     export FirstReactionMethod, ExtrandeMethod, GillespieMethod
 
     include("simulation.jl")
-    export SimulationParameters, simulate
+    export SimulationParameters, simulate, simulate_step!
 
     include("macros.jl")
     export @interaction

@@ -6,7 +6,7 @@ get_λmax(s::GillespieMethod) = 0.0
 get_L(s::GillespieMethod) = Inf 
 
 function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::GillespieMethod, model; ratemax=0, Lf=nothing)
-    pstate!(pmod, pvec, subsrules, model, subs, state, tspan[1])
+    pstate!(pmod, pvec, subsrules, subs, tspan[1])
     λ = ratef(state.pop_state, pvec, tspan[1])
     proposet = tspan[1] + randexp() / λ 
     return proposet
@@ -83,7 +83,7 @@ get_L(s::FirstReactionMethod) = s.L
 
 function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, tspan, sampler::FirstReactionMethod, model; ratemax, Lf)
     proposet = tspan[1]
-    pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
+    pstate!(pmod, pvec, subsrules, subs, proposet)
 
     while true
         last_prop = proposet
@@ -101,14 +101,14 @@ function sample_first_arrival(ratef, pop, pvec, pmod, subsrules, subs, state, ts
             # If the proposal outside the simulated timespan return Inf (no interaction).
             proposet ≥ tspan[end] && return Inf
             # Else set state to the new time and keep sampling.
-            pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
+            pstate!(pmod, pvec, subsrules, subs, proposet)
             continue
         end
 
         proposet ≥ tspan[end] && return Inf
 
         U = rand()
-        pstate!(pmod, pvec, subsrules, model, subs, state, proposet)
+        pstate!(pmod, pvec, subsrules, subs, proposet)
         λt = ratef(state.pop_state, pvec, proposet)
 
         # Catch misspecification of bounds.

@@ -63,12 +63,12 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
         # If the bound is independent of trait values the same bound holds for all reactions.
         substrates = AgentState[get_agent(state, agent) for agent in rx_.substrates]
 
-        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        pstate!(pmod, pvec, subsrules, substrates, tspan[1])
         aggregate.Lmin = Lf(pop, pvec_, tspan[1])
 
         teval = get_teval(aggregate, rx, tspan)
 
-        pstate!(pmod, pvec, subsrules, model, substrates, state, teval)
+        pstate!(pmod, pvec, subsrules, substrates, teval)
         aggregate.Bmax = len * ratefmax(pop, pvec_, teval)
         return nothing
     end
@@ -79,7 +79,7 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         # Compute lookahead horizon.
-        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        pstate!(pmod, pvec, subsrules, substrates, tspan[1])
         L = Lf(pop, pvec, tspan[1])
         if L < aggregate.Lmin
             aggregate.Lmin = L
@@ -87,7 +87,7 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
 
         # Get rate bound evaluated at teval. 
         teval = get_teval(aggregate, rx, tspan)
-        pstate!(pmod, pvec, subsrules, model, substrates, state, teval)
+        pstate!(pmod, pvec, subsrules, substrates, teval)
         rB = ratefmax(pop, pvec, teval) 
         if rB >= 0.0 
             aggregate.Bmax += rB
@@ -112,7 +112,7 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
     for rx in rxs
         # Bound the rates for each reaction in the aggregate.
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
-        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        pstate!(pmod, pvec, subsrules, substrates, tspan[1])
         Lmin_ = Lf(pop, pvec, tspan[1])
 
         if Lmin_ < Lmin 
@@ -120,13 +120,14 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
         end
 
         # All times recorded in the simulations.
-        ts = Set(reduce(vcat, [sub.simulation.t for sub in substrates]))
+        ts = Set(reduce(vcat, [sub.simulation.t for sub in substrates if !isnothing(sub.simulation)], init=[]))
+        push!(ts, [tspan[1], tspan[1] + Lmin]...)
         B = 0.0
         for t in ts
             t < tspan[1] && continue 
             t > tspan[1] + Lmin && continue # These times outside lookahead horizon.
 
-            pstate!(pmod, pvec, subsrules, model, substrates, state, t)
+            pstate!(pmod, pvec, subsrules, substrates, t)
             rB = ratef(pop, pvec, t) 
             if rB > B
                 B = rB
@@ -167,7 +168,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{T,BType},rxTy
 
         for rx in rxs 
             substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
-            pstate!(pmod, pvec, subsrules, model, substrates, state, prop_ttnj)
+            pstate!(pmod, pvec, subsrules, substrates, prop_ttnj)
             r = ratef(pop, pvec, prop_ttnj)
             if r >= 0.0 
                 cur_rate += r 
@@ -210,7 +211,7 @@ function sample_(aggregate::PopulationItxAggregator{GillespieMethod,rxType,S}, s
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
         # Each agent might have constants.
-        pstate!(pmod, pvec, subsrules, model, substrates, state, tspan[1])
+        pstate!(pmod, pvec, subsrules, substrates, tspan[1])
         r = ratef(pop, pvec, tspan[1])
         if r >= 0.0 
             rates[idx] = r 
@@ -252,7 +253,6 @@ end
 
 function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, Btype}, rxType, S}, state, model, params, tspan; kwargs...) where {rxType,S, Btype <: Union{SpecifiedBound, IncreasingRate, DecreasingRate}, F}
     rxs = values(aggregate.rxs)
-    rx_ = first(rxs)
 
     next_rx = 0
     next_rx_time = Inf
@@ -261,6 +261,7 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, Btype
     aggregate.next_rx_time = next_rx_time 
 
     isempty(rxs) && return nothing
+    rx_ = first(rxs)
 
     pop = state.pop_state
     @unpack pvec, pmod, subsrules = rx_.pitx
@@ -284,7 +285,6 @@ end
 
 function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, UnknownBound},rxType,S}, state, model, params, tspan; kwargs...) where {rxType,S,F}
     rxs = values(aggregate.rxs)
-    rx_ = first(rxs)
 
     next_rx = 0
     next_rx_time = Inf
@@ -293,6 +293,7 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, Unkno
     aggregate.next_rx_time = next_rx_time 
 
     isempty(rxs) && return nothing
+    rx_ = first(rxs)
 
     pop = state.pop_state
     @unpack pvec, pmod, subsrules, ratefmax, Lf, ratef = first(rxs).pitx
@@ -301,14 +302,16 @@ function sample_(aggregate::PopulationItxAggregator{FirstReactionMethod{F, Unkno
     for rx in rxs
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
 
-        # All times recorded in the simulations.
-        ts = Set(reduce(vcat, [sub.simulation.t for sub in substrates]))
+        # All times recorded in the simulations. 
+        ts = Set(reduce(vcat, [sub.simulation.t for sub in substrates if !isnothing(sub.simulation)], init=[]))
+        # Always evaluate at endpoints.
+        push!(ts, tspan...)
         B = 0.0
         for t in ts
             t < tspan[1] && continue 
             t > tspan[2] && continue # These times outside sampling interval.
 
-            pstate!(pmod, pvec, subsrules, model, substrates, state, t)
+            pstate!(pmod, pvec, subsrules, substrates, t)
             rB = ratef(pop, pvec, t) 
             if rB > B
                 B = rB

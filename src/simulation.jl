@@ -2,14 +2,16 @@ mutable struct SimulationState{N,idType}
     t::Float64
     pop::Dict{Num, IdDict{idType, Any}}
     pop_state::NTuple{N, Int64}
+    model::PopulationModel
     srxs::IdDict{idType, Any}
 
-    function SimulationState(t, pop, rxs)
+    function SimulationState(t, pop, rxs, model)
         state = new{length(pop),idType}()
         state.t = t
         state.pop = pop
         state.srxs = IdDict{idType, Any}(
             rx.uid => build_aggregate(rx, t) for rx in rxs)
+        state.model = model
         return state
     end
 end
@@ -191,12 +193,12 @@ struct AmbigiousConnection <: Exception end
 struct TraitDefinitionMissing <: Exception end
 struct BirthDefinitionMissing <: Exception end
 
-function update_pop_state!(state::SimulationState, model::PopulationModel)
+function update_pop_state!(state::SimulationState)
     pop_state = Dict(k => length(state.pop[k]) for k in keys(state.pop);) 
-    state.pop_state = population_state_vector(pop_state, model.rn) 
+    state.pop_state = population_state_vector(pop_state, state.model.rn) 
 end
 
-function compute_new_agents(srx::srxType, state::sType, time::tType, model::PopulationModel, params::SimulationParameters) where {srxType, sType, tType}
+function compute_new_agents(srx::srxType, state::sType, time::tType, params::SimulationParameters) where {srxType, sType, tType}
     new = Dict{Num, IdDict{idType, Any}}()
 
     products = srx.pitx.itxdef.rx.rx.products
@@ -206,14 +208,14 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, model::Popu
     # Construct input.
 
     new_agents = vcat(fill.(products, prodstoich)...)
-    new_traits = trait_transition(srx.pitx, new_agents, substrates, srx.pitx.subsrules, state, model, time)
+    new_traits = trait_transition(srx.pitx, new_agents, substrates, srx.pitx.subsrules, state, time)
 
-    pstate!(srx.pitx.pmod, srx.pitx.pvec, srx.pitx.subsrules, model, substrates, state, time)
+    pstate!(srx.pitx.pmod, srx.pitx.pvec, srx.pitx.subsrules, substrates, time)
     varsubs = variable_subs(srx.pitx.itxdef.vars, srx.pitx.pvec, srx.pitx.psymbs)
 
     for (i, agent) in enumerate(new_agents)
-        dyn = model.traitdefs[agent].dynamics
-        cts = model.traitdefs[agent].constants
+        dyn = state.model.traitdefs[agent].dynamics
+        cts = state.model.traitdefs[agent].constants
 
         !in(agent, keys(new)) && begin new[agent] = IdDict{idType, Any}() end
 
@@ -304,7 +306,7 @@ function update_dtime!(time, srx, deleted, agents)
     end
 end
 
-function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
+function log_outstates!(srx::SimulationReaction, state, rxtime, agents, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
     out_traits = filter(x -> x isa SaveOutStateTrait, saving) 
     isempty(out_traits) && return nothing 
@@ -316,7 +318,7 @@ function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, r
             !isequal(save.agent, agent.sym) && continue
             name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
-            idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
+            idx = indexof(save.trait, unknowns(state.model.traitdefs[agent.sym].dynamics))
 
             !in(name, keys(savevalues)) && begin 
                 savevalues[name] = Float64[]
@@ -335,7 +337,7 @@ function log_outstates!(srx::SimulationReaction, state, rxtime, agents, model, r
     end
 end
 
-function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, results::SimulationResults)
+function log_instates!(srx::SimulationReaction, state, rxtime, agents, results::SimulationResults)
     saving = srx.pitx.itxdef.saving
     in_traits = filter(x -> x isa SaveInStateTrait, saving) 
     isempty(in_traits) && return nothing 
@@ -347,7 +349,7 @@ function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, re
             !isequal(save.agent, agent.sym) && continue
             name = Symbol(string(save_trait_name(save)) * "_$(srx.pitx.itxdef.name)")
 
-            idx = indexof(save.trait, unknowns(model.traitdefs[agent.sym].dynamics))
+            idx = indexof(save.trait, unknowns(state.model.traitdefs[agent.sym].dynamics))
 
             !in(name, keys(savevalues)) && begin 
                 savevalues[name] = Float64[]
@@ -366,7 +368,7 @@ function log_instates!(srx::SimulationReaction, state, rxtime, agents, model, re
     end
 end
 
-function log_snapshot!(time, saving, state::SimulationState, model, results::SimulationResults)
+function log_snapshot!(time, saving, state::SimulationState, results::SimulationResults)
     isempty(saving) && return nothing
 
     for save in saving 
@@ -377,11 +379,11 @@ function log_snapshot!(time, saving, state::SimulationState, model, results::Sim
         for agent in Iterators.flatten(values.(values(state.pop)))
             if save isa StateSnapshot 
                 !isequal(agent.sym, save.agent) && continue
-                if in(save.trait, Set(unknowns(model.traitdefs[agent.sym].dynamics)))
+                if in(save.trait, Set(unknowns(state.model.traitdefs[agent.sym].dynamics)))
                     push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
                 end
 
-                constsyms = first.(model.traitdefs[agent.sym].constants)
+                constsyms = first.(state.model.traitdefs[agent.sym].constants)
                 if in(save.trait, Set(constsyms))
                     idx = indexof(save.trait, constsyms)
                     push!(snapshot, agent.consts[idx][2])
@@ -430,14 +432,13 @@ function init_simulator(modeldef, init_pop, params)
     model = PopulationModel(modeldef, params) 
 
     population = initialise_agents(model, init_pop, (params.tspan[1], params.tspan[1] + params.Δt), params)
-    state = SimulationState(params.tspan[1], population, model.rxs)
-    results = SimulationResults(modeldef; snapshot=params.snapshot)
-    update_pop_state!(state, model)
+    state = SimulationState(params.tspan[1], population, model.rxs, model)
+    update_pop_state!(state)
 
 #    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=model)
 #    make_reactions!(state.pop, state, model, (state.t, state.t + params.Δt), params)
 
-    return state, results, model
+    return state
 end
 
 function save_interactions!(interactions, rxtime, srx, state)
@@ -445,64 +446,124 @@ function save_interactions!(interactions, rxtime, srx, state)
     push!(interactions, (rxtime, srx, agents))
 end
 
+function dict_to_init_vec(state)
+    updated_state = []
+    for (uid, agent) in Iterators.flatten(values(state.pop))
+        agent_state = []
+
+        k_ = first.(agent.init_trait)
+        !isempty(k_) && begin
+            push!(agent_state, Tuple(k_ .=> agent.simulation(state.t; idxs=collect(k_)))...)
+        end
+
+        push!(agent_state, agent.consts...)
+
+        push!(updated_state, agent.sym => agent_state)
+    end
+    return updated_state
+end
+
+function simulate_step!(state, params)
+    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=state.model)
+    make_reactions!(state.pop, state, state.model, (state.t, state.t + params.Δt), params)
+
+
+    tend = minimum([state.t + params.Δt, params.tspan[end]])
+
+    sample_aggregates!(state.srxs, state, state.model, params, (state.t, tend), recompute=true)
+    next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
+    rxidx = state.srxs[rx_channel].next_rx 
+
+    if next_rx_time < tend && rxidx != 0
+        srx = state.srxs[rx_channel].rxs[rxidx]
+        new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, params)
+        update_dtime!(next_rx_time, srx, deleted_agents, state.pop)
+
+        # Remove agents involved in the current reaction and reactions with
+        # them as substrates.
+        filter_rxs!(state, deleted_agents)
+
+        # Simulate traits of the new agents to tend.   
+        simulate_traits!(new_agents, next_rx_time, tend, params; model=state.model)
+
+        # Add the new to the population state.
+        push_to_pop!(state.pop, new_agents)
+
+        # New reactions.
+        make_reactions!(new_agents, state, state.model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
+        state.t = next_rx_time 
+        update_pop_state!(state)
+
+    elseif next_rx_time < tend && rxidx == 0 
+        state.t = next_rx_time 
+    else 
+        state.t = tend 
+        tend = minimum([state.t + params.Δt, params.tspan[end]])
+        simulate_traits!(state.pop, state.t, tend, params; model=state.model)
+    end
+
+    return dict_to_init_vec(state)
+end
+
 function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters; 
     showprogress=true, 
     save_interactions=false,
     trace_agents=false) 
 
-    state, results, model = init_simulator(modeldef, init_pop, params)
+    state = init_simulator(modeldef, init_pop, params)
+    results = SimulationResults(modeldef; snapshot=params.snapshot)
 
-    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=model)
-    make_reactions!(state.pop, state, model, (state.t, state.t + params.Δt), params)
+    simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=state.model)
+    make_reactions!(state.pop, state, state.model, (state.t, state.t + params.Δt), params)
 
     showprogress && begin
         progress = ProgressUnknown()
     end
 
     all_agents = Dict{Num, Dict{idType, Any}}()
-    log_snapshot!(state.t, params.snapshot, state, model, results)
+    log_snapshot!(state.t, params.snapshot, state, results)
     tend = minimum([state.t + params.Δt, params.tspan[end]])
     recompute_bounds = true
 
     try 
         while true
-            sample_aggregates!(state.srxs, state, model, params, (state.t, tend), recompute=recompute_bounds)
+            sample_aggregates!(state.srxs, state, state.model, params, (state.t, tend), recompute=recompute_bounds)
             next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
             rxidx = state.srxs[rx_channel].next_rx 
 
             if next_rx_time < tend && rxidx != 0
                 srx = state.srxs[rx_channel].rxs[rxidx]
-                new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, model, params)
+                new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, params)
                 update_dtime!(next_rx_time, srx, deleted_agents, state.pop)
 
                 # Logging
-                log_instates!(srx, state, next_rx_time, deleted_agents, model, results)
+                log_instates!(srx, state, next_rx_time, deleted_agents, results)
 
                 # Remove agents involved in the current reaction and reactions with
                 # them as substrates.
                 filter_rxs!(state, deleted_agents)
 
                 # Simulate traits of the new agents to tend.   
-                simulate_traits!(new_agents, next_rx_time, tend, params; model=model)
+                simulate_traits!(new_agents, next_rx_time, tend, params; model=state.model)
 
-                log_outstates!(srx, state, next_rx_time, new_agents, model, results)
+                log_outstates!(srx, state, next_rx_time, new_agents, results)
 
                 # Add the new to the population state.
                 trace_agents && push_to_pop!(all_agents, deleted_agents)
                 push_to_pop!(state.pop, new_agents)
 
                 # New reactions.
-                make_reactions!(new_agents, state, model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
+                make_reactions!(new_agents, state, state.model, (next_rx_time, tend), params; make_zero_substrate_rx=false)
                 state.t = next_rx_time 
                 save_interactions && save_interactions!(results.interactions, next_rx_time, srx, state)
-                update_pop_state!(state, model)
+                update_pop_state!(state)
             elseif next_rx_time < tend && rxidx == 0 
                 state.t = next_rx_time 
             else 
                 state.t = tend 
                 tend = minimum([state.t + params.Δt, params.tspan[end]])
-                simulate_traits!(state.pop, state.t, tend, params; model=model)
-                log_snapshot!(state.t, params.snapshot, state, model, results)
+                simulate_traits!(state.pop, state.t, tend, params; model=state.model)
+                log_snapshot!(state.t, params.snapshot, state, results)
             end
 
             pop_size = length(collect(Iterators.flatten(values.(values(state.pop)))))
@@ -526,7 +587,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
         end
     end
 
-    log_snapshot!(state.t, params.snapshot, state, model, results)
+    log_snapshot!(state.t, params.snapshot, state, results)
     results.tend = state.t
 
     trace_agents && push_to_pop!(all_agents, state.pop)

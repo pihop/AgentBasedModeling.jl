@@ -164,7 +164,7 @@ function Base.show(io::IO, itx::PopulationItx{M,F}) where {M,F}
     print(io, "PopulationItx $(itx.itxdef.rx.rx).")
 end
 
-function trait_transition(pitx::itxType, products::pType, substrates::sType, subsrules::srType, state::stType, model::mType, t::Float64) where {itxType, pType, sType, srType, stType, mType}
+function trait_transition(pitx::itxType, products::pType, substrates::sType, subsrules::srType, state::stType, t::Float64) where {itxType, pType, sType, srType, stType}
     subs_ = Pair{Num, Float64}[]
     out_ = Vector{Pair{Num, Num}}[]
     for (s, (idx_, sym_, la_)) in subsrules
@@ -181,14 +181,14 @@ function trait_transition(pitx::itxType, products::pType, substrates::sType, sub
     return out_
 end
 
-function pstate!(pmod, pvec, subsrules, model, substrates, state, t::Float64)
+function pstate!(pmod, pvec, subsrules, substrates, t::Float64)
     isempty(pmod) && return nothing 
     for (p, i, (idx_, sym_, la_)) in pmod
         @inbounds pvec[i] = get_trait_value(substrates[idx_], t, la_)
     end
 end
 
-function pstate(pmod, subsrules, model, substrates, state, t::Float64)
+function pstate(pmod, subsrules, substrates, t::Float64)
     pvec = zeros(Float64, length(pmod)) 
     isempty(pmod) && return nothing 
     for (p, i, (idx_, sym_, la_)) in pmod
@@ -398,8 +398,8 @@ function make_hybrid(rs, init, tspan, params;
     pmap = symmap_to_varmap(rs, params)
 
     prob = ODEProblem(complete(jsys), u0map, tspan, pmap; )
-    jprob = JumpInputs(complete(jsys), prob)
-    return JumpProblem(jprob)
+#    jprob = JumpInputs(complete(jsys), prob)
+    return JumpProblem(complete(jsys), prob)
 end
 
 
