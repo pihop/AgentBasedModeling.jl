@@ -610,5 +610,6 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
     trace_agents && push_to_pop!(all_agents, state.pop)
     results.agents = all_agents 
     results.final_pop = state.pop
+    results.final = dict_to_init_vec(state)
     return results
 end
