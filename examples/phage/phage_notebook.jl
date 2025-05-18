@@ -210,8 +210,8 @@ Lysis of infected cells happens with a rate dependent on the time since infectio
 # ╔═╡ d79fd199-1ea5-4b4b-981d-228f77266db0
 begin
 	@parameters μlysis cvlysis
-	γlysis(μ, cv, τ, p) = ( p > 0 ? 1. : 0. )*gammahazard(μ, cv, τ)
-	@register_symbolic γlysis(μ, cv, τ, p)
+	γlysis(μ, cv2, τ, p) = ( p > 0 ? 1. : 0. )*gammahazard(μ, cv2, τ)
+	@register_symbolic γlysis(μ, cv2, τ, p)
 	
 	lysis = @interaction begin
 	    @channel γlysis(μlysis, cvlysis, $Cτ, $Cp), $C + $Env --> $Env
@@ -380,8 +380,7 @@ Making use of the `construct_intreaction_graph` function provided by the package
 
 # ╔═╡ 95eb5b09-8532-4877-a1a8-6940cbadff3b
 begin
-	#ressim[1].final_pop[C]
-	itx_graph = construct_interaction_graph(ressim[10]; agent_filter=[Env,])
+	itx_graph = construct_interaction_graph(ressim[1]; agent_filter=[Env,])
 end
 
 # ╔═╡ 6c049394-204a-4011-ab6c-7cc294fa54e2
