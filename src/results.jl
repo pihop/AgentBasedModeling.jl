@@ -11,18 +11,13 @@ mutable struct SimulationResults
     tend
 
     function SimulationResults()
-        ins = Dict()
-        outs = Dict()
-        sshot = Dict()
-
-        return new(ins, outs, sshot, nothing, nothing, [])
+        return new(Dict(), Dict(), Dict(), Dict(), Dict(), [], [], nothing)
     end
 end
 
 function Base.show(io::IO, ::MIME"text/plain", results::SimulationResults)
-    print(io, "Simulation results")
+    print(io, "Simulation results.")
 end
-
 
 struct SaveInStateTrait <: AbstractSaveTrait
     agent
