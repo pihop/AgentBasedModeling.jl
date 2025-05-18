@@ -6,10 +6,11 @@ mutable struct SimulationResults
     snapshot::Dict
     agents
     final_pop
+    final
     interactions
     tend
 
-    function SimulationResults(model; snapshot)
+    function SimulationResults()
         ins = Dict()
         outs = Dict()
         sshot = Dict()
