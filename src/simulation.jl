@@ -463,14 +463,27 @@ function dict_to_init_vec(state)
     return updated_state
 end
 
-function simulate_step!(state, params)
+function simulate_step!(state, params; results::Union{Nothing, SimulationResults} = nothing)
+    """
+        simulate_step!(state, params[; results])
+
+    Under parameters `params::SimulationParameters` simulates the `state::SimulationState`
+    forward to a time t + t' where t' is time till next interaction reaction or 't = params.Δt'
+    when no inteactions occurred.
+
+    Optional kwarg `results::Union{Nothing, SimulationResults}` enable writes state changes to 
+    SimulationResults structure.
+    """ 
+
     simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=state.model)
     make_reactions!(state.pop, state, state.model, (state.t, state.t + params.Δt), params)
-
 
     tend = minimum([state.t + params.Δt, params.tspan[end]])
 
     sample_aggregates!(state.srxs, state, state.model, params, (state.t, tend), recompute=true)
+
+    !isnothing(results) && log_snapshot!(state.t, params.snapshot, state, results)
+
     next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
     rxidx = state.srxs[rx_channel].next_rx 
 
@@ -479,12 +492,16 @@ function simulate_step!(state, params)
         new_agents, deleted_agents = compute_new_agents(srx, state, next_rx_time, params)
         update_dtime!(next_rx_time, srx, deleted_agents, state.pop)
 
+        !isnothing(results) && log_instates!(srx, state, next_rx_time, deleted_agents, results)
+
         # Remove agents involved in the current reaction and reactions with
         # them as substrates.
         filter_rxs!(state, deleted_agents)
 
         # Simulate traits of the new agents to tend.   
         simulate_traits!(new_agents, next_rx_time, tend, params; model=state.model)
+
+        !isnothing(results) && log_outstates!(srx, state, next_rx_time, new_agents, results)
 
         # Add the new to the population state.
         push_to_pop!(state.pop, new_agents)
@@ -511,7 +528,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
     trace_agents=false) 
 
     state = init_simulator(modeldef, init_pop, params)
-    results = SimulationResults(modeldef; snapshot=params.snapshot)
+    results = SimulationResults()
 
     simulate_traits!(state.pop, state.t, state.t + params.Δt, params; model=state.model)
     make_reactions!(state.pop, state, state.model, (state.t, state.t + params.Δt), params)
