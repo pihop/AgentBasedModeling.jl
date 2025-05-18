@@ -74,3 +74,4 @@ res.snapshot[:C]
 
 The package is flexible --- see the following for more complex examples!
 * [Cell population with gene expression coupled to growth and division.](https://pihop.github.io/AgentBasedModeling.jl/sizecontrol/sizecontrol_notebook.html)
+* [Bacteriophage infection dynamics.](https://pihop.github.io/AgentBasedModeling.jl/phage/phage_notebook.html)
