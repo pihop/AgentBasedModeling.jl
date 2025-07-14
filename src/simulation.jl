@@ -524,8 +524,8 @@ end
 
 function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters; 
     showprogress=true, 
-    save_interactions=false,
-    trace_agents=false) 
+    save_interactions=true,
+    trace_agents=true) 
 
     state = init_simulator(modeldef, init_pop, params)
     results = SimulationResults()
