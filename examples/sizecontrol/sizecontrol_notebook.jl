@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.6
+# v0.20.13
 
 using Markdown
 using InteractiveUtils
@@ -26,9 +26,6 @@ begin
 		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
     ])
 	using OrdinaryDiffEq
-	using AgentBasedModeling
-	using Catalyst
-	using Distributions
 	using JumpProcesses
 	using LinearAlgebra
 	using CairoMakie
@@ -39,6 +36,28 @@ begin
 	using NetworkLayout
 	using Interpolations
 	using ColorSchemes
+end;
+
+# ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
+begin
+	using Catalyst, Distributions, AgentBasedModeling
+	@variables t 
+	@abm_variables Δ(t) s(t) p(t)
+	@parameters α kprod b 
+	D = Differential(t)
+	
+	@register_symbolic Distributions.Geometric(a)
+	m = rand(Distributions.Geometric(1/(1 + b*s)))
+
+	CellDynamics = @reaction_network begin
+		@species p(t) Δ(t) s(t)
+		@equations begin
+			D(s) ~ $α*s 
+	 		D(Δ) ~ $α*s 
+	 		D(p) ~ 0.0
+		end
+    	kprod, 0 --> $m*p 
+	end
 end;
 
 # ╔═╡ 4e3e20d3-d152-4c26-a1f8-a0f4d11cf025
@@ -65,27 +84,6 @@ md"""
 # Step 1
 """
 
-# ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
-begin
-	@independent_variables t 
-	@abm_variables C(t) p(t) Δ(t) s(t)
-	@parameters s0 α kprod b 
-	D = Differential(t)
-	
-	@register_symbolic Distributions.Geometric(a)
-	m = rand(Distributions.Geometric(1/(1 + b*s)))
-
-	cell_dynamics = @reaction_network begin
-		@species p(t) Δ(t) s(t)
-		@equations begin
-			D(s) ~ $α*s 
-	 		D(Δ) ~ $α*s 
-	 		D(p) ~ 0.0
-		end
-    	kprod, 0 --> $m*p 
-	end
-end;
-
 # ╔═╡ d6827f12-e43b-4f19-bfa0-c8cc5d040fa4
 md"""
 The cells are also assumed to grow exponentially in size with a rate α. The cell age increases linearly with time. To model that we define an ODE system.
@@ -97,7 +95,7 @@ AgentBasedModeling exports the structure AgentDynamics which we use to collect t
 """
 
 # ╔═╡ fee337cd-3f0c-4ccd-a023-7aa4e717c678
-Cell = AgentDynamics(cell_dynamics, ());
+Cell = AgentDynamics(CellDynamics, ());
 
 # ╔═╡ 7fcf8886-a1f9-419f-aef7-18ab5a39ce52
 md"""
@@ -137,17 +135,16 @@ Using the defined functions the intereaction channel definition becomes.
 """
 
 # ╔═╡ a5a789ea-2760-4815-bb71-9390f0db125c
-begin	
+begin
+	@abm_variables C(t)
 	@parameters Cs CΔ Cp β B L
 	
 	division = @interaction begin
 	    @channel γdivision($Cs, $CΔ, $α), C --> 2*C
 	    @sampler ExtrandeMethod($L; boundtype=:increasing)
-		@connections (
-			($CΔ => $Δ, $Cs => $s, $Cp => $p),)		
+		@connections (($CΔ => $Δ, $Cs => $s, $Cp => $p),)		
 		@variable $β = rand($Beta(100))
 		@variable $B = rand($Binomial($Cp, $β))
-#	    @variable $B = $partition_molecules($Cp, $β)
 	    @transition (
 	        ($Δ => 0.0, $s => $β*$Cs, $p => $B),
 	        ($Δ => 0.0, $s => (1-$β)*$Cs, $p => $Cp - $B))
@@ -178,7 +175,7 @@ model = AgentsModel([division, ], Dict(C => Cell,));
 
 # ╔═╡ 36e52938-da75-480d-b7f9-ded770d6ee0d
 md"""
-Give an initial population of single cell with protein count 20, age 0, size 0.5.
+Give an initial population of single cell with protein count 0, age 0, size 0.4.
 """
 
 # ╔═╡ fac12c07-df5b-481f-b5da-d79c9db46a56
@@ -209,7 +206,7 @@ Run the simulation.
 
 # ╔═╡ e54d3fa5-098b-4010-95fc-78548c4ce9c8
 # ╠═╡ show_logs = false
-res = simulate(model, initial_population, params; trace_agents=true, save_interactions=true);
+res = simulate(model, initial_population, params);
 
 # ╔═╡ b489fcfc-3759-4f64-aaec-ecae94ac1c3f
 md"""
@@ -583,7 +580,7 @@ end
 # ╟─08559fb8-3342-4df5-80d8-4ad280eb472e
 # ╟─b7a54dcb-ecda-4497-b171-fb426b57e90d
 # ╠═f4281e59-5197-4d6c-90a9-5b298cd1dbec
-# ╟─36e52938-da75-480d-b7f9-ded770d6ee0d
+# ╠═36e52938-da75-480d-b7f9-ded770d6ee0d
 # ╠═fac12c07-df5b-481f-b5da-d79c9db46a56
 # ╟─eb2d10e3-4872-4f7f-8f8d-2bc5903abea1
 # ╠═ae0cdda0-fdcf-4eae-b342-d2bf4dd5689d
