@@ -174,7 +174,7 @@ function sample_(aggregate::PopulationItxAggregator{ExtrandeMethod{T,BType},rxTy
                 cur_rate += r 
             else 
                 cur_rate += 0.0 
-                @warn "Rate evaluated to $rB < 0. Small negative values can result from continuous ODE solvers overstepping 0.
+                @warn "Rate evaluated to $r < 0. Small negative values can result from continuous ODE solvers overstepping 0.
                 If large negative values check the rate functions in the model are correctly specified." maxlog=3
             end
 
