@@ -45,7 +45,7 @@ end;
 
 # ╔═╡ 0d78e430-a18f-4795-8772-261a2212936d
 md"""
-The pupose of this notebook is to demostrate the usage of AgentBasedModeling.jl and recreate the cell phage model from the paper.
+# Cell phage example
 """
 
 # ╔═╡ 3bb91f15-8249-433c-945d-16ea62f644a7
@@ -111,7 +111,7 @@ Hazard function for the gamma distribution. Gammahaz function parametrised by th
 
 # ╔═╡ 7641cde7-8496-49a4-a90f-040af64b5f01
 md"""
-We use the gamma hazard to define a rate function γdiv for cells to divide at size s and protein count p given initial size s0 and growth rate α. This rate is monotonically increasing and hence we set `@sampler ExtrandeMethod($L; boundtype=:increasing)`.
+We use the gamma hazard to define a rate function γdivision for cells to divide at size s and protein count p given initial size s0 and growth rate α. This rate is monotonically increasing and hence we set `@sampler ExtrandeMethod($L; boundtype=:increasing)`.
 """
 
 # ╔═╡ 71ba5cb9-17e8-4e2f-bfe0-0dcabd78e390
@@ -259,7 +259,7 @@ md"""
 
 # ╔═╡ 9c6353c0-d812-4b3e-837d-9f76cf7c3702
 md"""
-We combine the defied interactions and agent types into the `AgentModel`.
+We combine the defied interactions and agent types into the `AgentsModel`.
 """
 
 # ╔═╡ 006fca5c-5ce7-4a77-a8b3-d3cef0c023e0
