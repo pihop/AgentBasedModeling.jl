@@ -125,7 +125,8 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
         B = 0.0
         for t in ts
             t < tspan[1] && continue 
-            t > tspan[1] + Lmin && continue # These times outside lookahead horizon.
+            t > tspan[1] + Lmin && continue # Times outside lookahead horizon.
+            t > tspan[2] && continue # Times outside the simulation interval 
 
             pstate!(pmod, pvec, subsrules, substrates, t)
             rB = ratef(pop, pvec, t) 
