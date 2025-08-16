@@ -52,24 +52,24 @@ end
 
 function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMethod{F,Btype},rxType,tType},
         rxs::R, state::S, model::M, params::P, tspan::T, len::Ltype) where {rxType, tType, Btype <: Union{SpecifiedBound, IncreasingRate, DecreasingRate}, F, R, S, M, P, T, Ltype <: Int}
-    rx_ = first(rxs)
+    rx = first(rxs)
 
     pop = state.pop_state
-        
-    @unpack pvec, pmod, subsrules = rx_.pitx
-    ratefmax, Lf, ratef = get_bound_functions(aggregate, rx_, tspan)
+
+    @unpack pvec, pmod, subsrules = rx.pitx
+    ratefmax, Lf, ratef = get_bound_functions(aggregate, rx, tspan)
 
     if aggregate.sampler.trait_indep 
         # If the bound is independent of trait values the same bound holds for all reactions.
-        substrates = AgentState[get_agent(state, agent) for agent in rx_.substrates]
+        substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
 
         pstate!(pmod, pvec, subsrules, substrates, tspan[1])
-        aggregate.Lmin = Lf(pop, pvec_, tspan[1])
+        aggregate.Lmin = Lf(pop, pvec, tspan[1])
 
         teval = get_teval(aggregate, rx, tspan)
 
         pstate!(pmod, pvec, subsrules, substrates, teval)
-        aggregate.Bmax = len * ratefmax(pop, pvec_, teval)
+        aggregate.Bmax = len * ratefmax(pop, pvec, teval)
         return nothing
     end
 
