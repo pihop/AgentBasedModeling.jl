@@ -86,15 +86,15 @@ function (sol::SnapshotSolution)(t::Number)
 end
 
 function build_snapshot_solution(snapshot; names)
-    t = getfield.(snapshot[names[1]], :time)
-    snaps = zip([getfield.(snapshot[name], :values) for name in names]...)
+    ts = snapshot[names[1]].t
+    snaps = zip([snapshot[name].u for name in names]...)
     us = [[s...] for s in snaps] 
     T = eltype(eltype(us))
     N = length((size(us[1])..., length(us)))
-    Interpolations.deduplicate_knots!(t)
-    interp = Interpolations.linear_interpolation(t, us)  
+    Interpolations.deduplicate_knots!(ts)
+    interp = Interpolations.linear_interpolation(ts, us)  
     retcode = ReturnCode.Success
-    return SnapshotSolution{T,N}(names, us, t, interp, retcode)
+    return SnapshotSolution{T,N}(names, us, ts, interp, retcode)
 end
 
 SciMLBase.interp_summary(::T) where T <: Interpolations.Extrapolation = "Linear Interpolation"
