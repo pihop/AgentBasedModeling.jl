@@ -67,7 +67,7 @@ md"""
 
 # ╔═╡ 696a96c3-3499-41a7-a045-ec5d55806319
 md"""
-The pupose of this notebook is to demostrate the usage of AgentBasedModeling.jl and recreate the size control model from the paper.
+The pupose of this notebook is to demostrate the usage of AgentBasedModeling.jl and recreate the stochastic gene expression from the paper.
 """
 
 # ╔═╡ 93633661-a134-4f9d-89f3-497c38283181
