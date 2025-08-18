@@ -42,7 +42,7 @@ function simulate_bulk(n, N, lookahead; model)
             PopulationSnapshot(R), 
             PopulationSnapshot(I), 
             PopulationSnapshot(S),
-            TraitSnapshot(I, τ)])
+            StateSnapshot(I, τ)])
 
 
     println("Simulation started")
@@ -91,10 +91,11 @@ function simulate_traj(n, N, lookahead; model)
     return solns
 end
 
-N = 1500
+mkpath("data/sir")
+N = 1000
 lookahead = 1.0
-res = simulate_bulk(10000, N, lookahead; model=population_model)
-save("$(datadir())/sir/sir_results.jld2", "ares", res)
+res = simulate_bulk(100, N, lookahead; model=population_model)
+save("data/sir/sir_results.jld2", "ares", res)
 
 res_traj = simulate_traj(10, 1000, lookahead; model=population_model_L)
-save("$(datadir())/sir/trajectories.jld2", "trajectories", res_traj)
+save("data/sir/trajectories.jld2", "trajectories", res_traj)
