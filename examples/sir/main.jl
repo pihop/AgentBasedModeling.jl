@@ -75,7 +75,7 @@ function simulate_traj(n, N, lookahead; model)
             PopulationSnapshot(R), 
             PopulationSnapshot(I), 
             PopulationSnapshot(S),
-            TraitSnapshot(I, τ)])
+            StateSnapshot(I, τ)])
 
     println("Simulation started")
     telapse = @elapsed begin
@@ -94,8 +94,8 @@ end
 mkpath("data/sir")
 N = 1000
 lookahead = 1.0
-res = simulate_bulk(100, N, lookahead; model=population_model)
-save("data/sir/sir_results.jld2", "ares", res)
+#res = simulate_bulk(100, N, lookahead; model=population_model)
+#save("data/sir/sir_results.jld2", "ares", res)
 
 res_traj = simulate_traj(10, 1000, lookahead; model=population_model_L)
 save("data/sir/trajectories.jld2", "trajectories", res_traj)
