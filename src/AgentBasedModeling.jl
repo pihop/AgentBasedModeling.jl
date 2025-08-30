@@ -11,6 +11,7 @@ module AgentBasedModeling
     import Symbolics: Symbolic
     using SymbolicUtils
     using OrdinaryDiffEq
+    using OrdinaryDiffEqCore
     using StochasticDiffEq
 
 #    using ModelingToolkit

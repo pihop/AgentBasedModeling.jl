@@ -154,7 +154,7 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
 
     interp = sim.interp
 
-    interp isa OrdinaryDiffEq.InterpolationData &&  begin
+    interp isa OrdinaryDiffEqCore.InterpolationData &&  begin
         ks = [agentsim.interp.ks; sim.interp.ks]
         interp = setproperties(interp, (timeseries = us, ts = ts, ks = ks)) 
     end
