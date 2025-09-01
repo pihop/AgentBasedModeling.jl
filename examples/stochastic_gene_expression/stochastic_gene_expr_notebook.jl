@@ -13,6 +13,7 @@ begin
     Pkg.add([
 		Pkg.PackageSpec(name="OrdinaryDiffEq"),
         Pkg.PackageSpec(name="Catalyst"),
+        Pkg.PackageSpec(name="ModelingToolkit"),
 		Pkg.PackageSpec(name="Distributions"),
 		Pkg.PackageSpec(name="JumpProcesses"),
 		Pkg.PackageSpec(name="CairoMakie"),
@@ -27,6 +28,7 @@ begin
     ])
 	using OrdinaryDiffEq
 	using JumpProcesses
+    using ModelingToolkit
 	using LinearAlgebra
 	using CairoMakie
 	using StatsBase
@@ -40,7 +42,7 @@ end;
 
 # ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
 begin
-	using Catalyst, Distributions, AgentBasedModeling
+	using Catalyst, ModelingToolkit, Distributions, AgentBasedModeling
 	@independent_variables t 
 	@abm_variables Δ(t) s(t) p(t)
 	@parameters α kprod b 
