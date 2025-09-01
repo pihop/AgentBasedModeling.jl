@@ -9,10 +9,9 @@ stairstransp = 0.9
 
 using Catalyst
 using JumpProcesses
-using SciMLBase
+using LinearAlgebra
 
-restraj = load("$(datadir())/sir/trajectories.jld2", "trajectories");
-res = load("$(datadir())/sir/sir_results.jld2", "ares");
+res = load("data/sir/sir_results.jld2", "ares");
 
 timesa = []
 for r in res.u
@@ -27,8 +26,8 @@ R0_ = 1.5
 γ_ = μ_/ε_ - μ_
 β_ = R0_ / (γ_ + μ_)
 scale = 1 
-N = Int64(1000)
-I0 = 3 
+N = Int64(500)
+I0 = 1 
 T = 100.
 tspan = (0, T)
 Δt = 1 
@@ -80,8 +79,8 @@ stairs!(axt, collect(midpoints(tcme.edges[1])), tcme.weights; color=(colors[1], 
 barplot!(axt, collect(midpoints(tcme.edges[1])), tcme.weights; 
     color=(colors[1], transp), strokecolor=(colors[1], transp), strokewidth=0.0, gap=0.0, dodge_gap=0.0)
 
-stairs!(axt, collect(midpoints(tcme.edges[1])), ta.weights; color=(colors[10], stairstransp), step=:center, label="Agent-based model")
-barplot!(axt, collect(midpoints(tcme.edges[1])), ta.weights; 
+stairs!(axt, collect(midpoints(ta.edges[1])), ta.weights; color=(colors[10], stairstransp), step=:center, label="Agent-based model")
+barplot!(axt, collect(midpoints(ta.edges[1])), ta.weights; 
     color=(colors[10], transp), strokecolor=(colors[10], transp), strokewidth=0.0, gap=0.0, dodge_gap=0.0)
 
 hidedecorations!(axt, ticks=false, label=false, ticklabels=false)
@@ -102,25 +101,23 @@ hidedecorations!(inset_ax, ticks=false, label=false, ticklabels=false)
 hidespines!(inset_ax, :r, :t)
 ylims!(inset_ax, low=0)
 
-getts(traj, sym) = [x.time for x in traj.snapshot[sym]]
-getval(traj, sym) = [x.values for x in traj.snapshot[sym]]
-
-for (i,idx) in zip([2,8], [2,5])
-    lines!(axtraj, getts(restraj[idx], :I), getval(restraj[idx], :I); color=colors[i], linewidth=2.0)
-    idx_ = findfirst(x -> x == 0, getval(restraj[idx], :I))
-    scatter!(axtraj, getts(restraj[idx], :I)[idx_], 0; color=colors[i], markersize=10, marker=:circ, strokecolor=colors[i], strokewidth=0.5)
+for (i, idx) in zip([1,1], [2,2])
+    traj = res.u[idx]
+    lines!(axtraj, traj.t, getindex.(traj.u, 1); color=colors[i], linewidth=2.0)
+    idx_ = findfirst(x -> x == 0, getindex.(traj.u, 1))
+    scatter!(axtraj, traj.t[idx_], 0; color=colors[i], markersize=10, strokecolor=colors[i], strokewidth=0.5)
 end
 
-hidedecorations!(axtraj, ticks=false, label=false, ticklabels=false)
-hidespines!(axtraj, :r, :t)
-
-#lines!(inset_ax, getindex.(timesLext , 3), getindex.(timesLext , 1); color=colors[1])
-#lines!(inset_ax, getindex.(timesLfrm , 3), getindex.(timesLfrm , 1); color=colors[2])
-
-hidedecorations!(inset_ax, ticks=false, label=false, ticklabels=false)
-hidespines!(inset_ax, :r, :t)
-xlims!(inset_ax, (0, 2))
-ylims!(inset_ax, (10, 50))
-
-mkpath("$(plotsdir())/sir/")
-save("$(plotsdir())/sir/burn.pdf", fig, pt_per_unit=1)
+#hidedecorations!(axtraj, ticks=false, label=false, ticklabels=false)
+#hidespines!(axtraj, :r, :t)
+#
+##lines!(inset_ax, getindex.(timesLext , 3), getindex.(timesLext , 1); color=colors[1])
+##lines!(inset_ax, getindex.(timesLfrm , 3), getindex.(timesLfrm , 1); color=colors[2])
+#
+#hidedecorations!(inset_ax, ticks=false, label=false, ticklabels=false)
+#hidespines!(inset_ax, :r, :t)
+#xlims!(inset_ax, (0, 2))
+#ylims!(inset_ax, (10, 50))
+#
+mkpath("plots/sir/")
+save("plots/sir/burn.pdf", fig, pt_per_unit=1)

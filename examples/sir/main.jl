@@ -22,7 +22,7 @@ n_ = 3.0
 
 # Simulator parameters.
 Δt = 1.0
-tspan = (0.0, 20.0)
+tspan = (0.0, 100.0)
 max_rxn = 1e12
 I0 = 3 
 
@@ -49,7 +49,6 @@ function simulate_bulk(n, N, lookahead; model)
     telapse = @elapsed begin
         solns = Vector(undef, n)
         Threads.@threads for i in 1:n
-#        for i in 1:n
             res = simulate(model, init_pop, simulation_params; showprogress=false)
             solns[i] = AgentBasedModeling.build_snapshot_solution(res.snapshot; names=[:I, :S, :R])
             next!(p)
@@ -94,8 +93,5 @@ end
 mkpath("data/sir")
 N = 1000
 lookahead = 1.0
-res = simulate_bulk(100, N, lookahead; model=population_model)
+res = simulate_bulk(2, N, lookahead; model=population_model_L)
 save("data/sir/sir_results.jld2", "ares", res)
-
-res_traj = simulate_traj(10, 1000, lookahead; model=population_model_L)
-save("data/sir/trajectories.jld2", "trajectories", res_traj)

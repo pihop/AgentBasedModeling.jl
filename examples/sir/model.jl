@@ -53,8 +53,8 @@ end
 # of rate bounds.
 infectionL = @interaction begin
     @channel γ_infect($Iτ, $β, $K, $n, $SAge) / ($S + $I + $R), $I + $S --> 2 * $I
-    @sampler ExtrandeMethod($γ_infect($Iτ + $LK, $β, $K, $n, $SAge)/($S+$I+$R), $LK)
-    #@sampler ExtrandeMethod($LK, boundtype=:unknown)
+#    @sampler ExtrandeMethod($γ_infect($Iτ + $LK, $β, $K, $n, $SAge)/($S+$I+$R), $LK)
+    @sampler ExtrandeMethod($LK, boundtype=:increasing)
     @connections (
         ($Iτ => $τ, $IAge => $Age),
         ($SAge => $Age, )
@@ -77,7 +77,8 @@ end
 
 infection_frm = @interaction begin
     @channel γ_infect($Iτ, $β, $K, $n, $SAge) / ($S + $I + $R), $I + $S --> 2 * $I
-    @sampler FirstReactionMethod($γ_infect($Iτ + $LK, $β, $K, $n, $SAge)/($S+$I+$R), $LK)
+    #@sampler FirstReactionMethod($γ_infect($Iτ + $LK, $β, $K, $n, $SAge)/($S+$I+$R), $LK)
+    @sampler FirstReactionMethod($LK, boundtype=:increasing)
     @connections (
         ($Iτ => $τ, $IAge => $Age),
         ($SAge => $Age, )
@@ -120,17 +121,17 @@ recovery = @interaction begin
     @savesubstrates ($I, $τ)
 end
 
-s_death = @interaction begin
+s_emig = @interaction begin
     @channel $μ, $S --> 0 
     @sampler GillespieMethod()
 end
 
-i_death = @interaction begin
+i_emig = @interaction begin
     @channel $μ, $I --> 0 
     @sampler GillespieMethod()
 end
 
-r_death = @interaction begin
+r_emig = @interaction begin
     @channel $μ, $R --> 0 
     @sampler GillespieMethod()
 end
@@ -138,17 +139,17 @@ end
 # Put them together.
 behaviours = Dict(I => Infected, S => Susceptible, R => Recovered)
 population_model_L = AgentsModel(
-    [infectionL, recovery, immigration, s_death, i_death, r_death], 
+    [infectionL, recovery, immigration, s_emig, i_emig, r_emig], 
     behaviours)
 
 population_model = AgentsModel(
-    [infection_cbnd, recovery, immigration, s_death, i_death, r_death], 
+    [infection_cbnd, recovery, immigration, s_emig, i_emig, r_emig], 
     behaviours)
 
 population_model_frm = AgentsModel(
-    [infection_frm_cbnd, recovery, immigration_frm, s_death, i_death, r_death], 
+    [infection_frm_cbnd, recovery, immigration_frm, s_emig, i_emig, r_emig], 
     behaviours)
 
 population_model_frmL = AgentsModel(
-    [infection_frm , recovery, immigration_frm, s_death, i_death, r_death], 
+    [infection_frm , recovery, immigration_frm, s_emig, i_emig, r_emig], 
     behaviours)
