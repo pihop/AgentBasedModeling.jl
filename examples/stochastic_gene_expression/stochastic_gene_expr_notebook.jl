@@ -41,7 +41,7 @@ end;
 # ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
 begin
 	using Catalyst, Distributions, AgentBasedModeling
-	@variables t 
+	@independent_variables t 
 	@abm_variables Δ(t) s(t) p(t)
 	@parameters α kprod b 
 	D = Differential(t)
