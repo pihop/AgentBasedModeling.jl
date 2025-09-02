@@ -28,7 +28,6 @@ begin
     ])
 	using OrdinaryDiffEq
 	using JumpProcesses
-    using ModelingToolkit
 	using LinearAlgebra
 	using CairoMakie
 	using StatsBase
