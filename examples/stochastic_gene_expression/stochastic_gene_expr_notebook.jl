@@ -1,11 +1,10 @@
 ### A Pluto.jl notebook ###
-# v0.20.13
+# v0.20.17
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ 355d1e6c-91f6-11ef-2f45-19eb05b5141f
-# ╠═╡ show_logs = false
 begin
     import Pkg
     # activate a temporary environment
@@ -37,11 +36,11 @@ begin
 	using NetworkLayout
 	using Interpolations
 	using ColorSchemes
-end;
+end
 
 # ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
 begin
-	using Catalyst, ModelingToolkit, Distributions, AgentBasedModeling
+	using Catalyst, Distributions, AgentBasedModeling
 	@independent_variables t 
 	@abm_variables Δ(t) s(t) p(t)
 	@parameters α kprod b 
