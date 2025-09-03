@@ -38,27 +38,8 @@ begin
 	using ColorSchemes
 end
 
-# ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
-begin
-	using Catalyst, Distributions, AgentBasedModeling
-	@independent_variables t 
-	@abm_variables Δ(t) s(t) p(t)
-	@parameters α kprod b 
-	D = Differential(t)
-	
-	@register_symbolic Distributions.Geometric(a)
-	m = rand(Distributions.Geometric(1/(1 + b*s)))
-
-	CellDynamics = @reaction_network begin
-		@species p(t) Δ(t) s(t)
-		@equations begin
-			D(s) ~ $α*s 
-	 		D(Δ) ~ $α*s 
-	 		D(p) ~ 0.0
-		end
-    	kprod, 0 --> $m*p 
-	end
-end;
+# ╔═╡ e1a5f259-5045-426a-b376-698bff75e96a
+using Catalyst, Distributions, AgentBasedModeling
 
 # ╔═╡ 4e3e20d3-d152-4c26-a1f8-a0f4d11cf025
 md"""
@@ -83,6 +64,27 @@ Let us set up the geometric distribution and the reaction network corresponding 
 md"""
 # Step 1
 """
+
+# ╔═╡ 35c0a480-6582-4531-ae36-1135665ee564
+begin
+	@independent_variables t 
+	@abm_variables Δ(t) s(t) p(t)
+	@parameters α kprod b 
+	D = Differential(t)
+	
+	@register_symbolic Distributions.Geometric(a)
+	m = rand(Distributions.Geometric(1/(1 + b*s)))
+
+	CellDynamics = @reaction_network begin
+		@species p(t) Δ(t) s(t)
+		@equations begin
+			D(s) ~ $α*s 
+	 		D(Δ) ~ $α*s 
+	 		D(p) ~ 0.0
+		end
+    	kprod, 0 --> $m*p 
+	end
+end;
 
 # ╔═╡ d6827f12-e43b-4f19-bfa0-c8cc5d040fa4
 md"""
@@ -565,6 +567,7 @@ end
 # ╠═355d1e6c-91f6-11ef-2f45-19eb05b5141f
 # ╟─93633661-a134-4f9d-89f3-497c38283181
 # ╟─019b50c4-dc51-45eb-bc28-770b8d5c2696
+# ╠═e1a5f259-5045-426a-b376-698bff75e96a
 # ╠═35c0a480-6582-4531-ae36-1135665ee564
 # ╟─d6827f12-e43b-4f19-bfa0-c8cc5d040fa4
 # ╟─1759ae4c-60ec-493d-a2d4-06b7cc83a8f2
