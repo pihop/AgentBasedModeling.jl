@@ -45,7 +45,7 @@ end;
 
 # ╔═╡ ea9c5a6d-7225-43b7-b3f9-562f2185f5b0
 md"""
-# Cell-to-cell communication example
+# Susceptible-infected-recovered model 
 """
 
 # ╔═╡ 6b3dab0d-b5c5-4632-a7f2-43fa0a07b01f
@@ -273,6 +273,8 @@ end;
 # ╔═╡ da7ef7e1-8dee-4bf3-bef3-e7326f0e03da
 md"""
 ## Standard SIR model
+
+We implement the standard SIR model using Catalyst.jl.
 """
 
 # ╔═╡ 7fd75040-894d-41e9-8f51-0c3b3f9add9d
