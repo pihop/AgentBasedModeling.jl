@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.17
+# v0.20.24
 
 using Markdown
 using InteractiveUtils
@@ -25,6 +25,7 @@ begin
 		Pkg.PackageSpec(name="NetworkLayout"),
 		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
     ])
+	using ModelingToolkit
 	using OrdinaryDiffEq
 	using JumpProcesses
 	using LinearAlgebra
@@ -76,13 +77,13 @@ begin
 	m = rand(Distributions.Geometric(1/(1 + b*s)))
 
 	CellDynamics = @reaction_network begin
-		@species p(t) Δ(t) s(t)
+		@species p(t) 
+		@variables Δ(t) s(t)
 		@equations begin
-			D(s) ~ $α*s 
-	 		D(Δ) ~ $α*s 
-	 		D(p) ~ 0.0
+			D(s) ~ $α*s
+	 		D(Δ) ~ $α*s
 		end
-    	kprod, 0 --> $m*p 
+    	kprod, 0 --> $m*p
 	end
 end;
 
@@ -112,10 +113,10 @@ md"""
 # ╔═╡ a5ff7927-087b-43bb-80a9-d9d13c3fe2c5
 begin
 	γsize(x; μ, cv2) = exp(
-    	logpdf(Gamma(1/cv2, μ*cv2), x) - logccdf(Gamma(1/μ, μ*cv2), x))
+    	logpdf(Gamma(1/cv2, μ*cv2), x) - logccdf(Gamma(1/cv2, μ*cv2), x))
 
 	# Adder rule for cell division.
-	γdivision(s, Δ, α; μ = 1.0, cv2 = 0.2) = α * s * γsize(Δ; μ=μ, cv2=cv2)
+	γdivision(s, Δ, α; μ = 0.5, cv2 = 0.2) = α * s * γsize(Δ; μ=μ, cv2=cv2)
 	@register_symbolic γdivision(s, Δ, α)
 end;
 
@@ -196,7 +197,7 @@ begin
 	Δt = 1.0
 	
 	params = SimulationParameters(
-	    [α => 1.0, kprod => 10.0, b => 6.0, L => 0.01], timespan, Δt; maxpop=1000)
+	    [α => 1.0, kprod => 10.0, b => 6.0, L => 0.01], timespan, Δt; maxpop=5000)
 end;
 
 
@@ -248,7 +249,7 @@ begin
 	ax_size = Axis(fig[1,2]; xlabel="Birth size distribution", ylabel="Probability density")
 	hidedecorations!.(fig.content, ticklabels = false, ticks = false, label = false)
 	hidespines!.(fig.content, :t, :r) 
-	xlims!(ax_protein, (0, 150))
+	xlims!(ax_protein, (0, 100))
 
 	function plot_hist!(ax, values; bins, color, label="", weight = 1.0, plotbars = true)
 		# Function for plotting the histograms with stair outline.
@@ -269,13 +270,13 @@ Plot the size and protein distributions at birth.
 begin
 	fig
 	plot_hist!(ax_size, reduce(vcat, res.outstates[:Cs_division].u); 
-		bins = 0:0.01:1.0, color=colors[1], label = "Agent-based simulation")
+		bins = 0:0.01:2.0, color=colors[1], label = "Agent-based simulation")
 	#plot_hist!(ax_protein, 
 	#	[Dict(a.init_trait)[p] for a in values(res.final_pop[C])]; 
 	#	bins=0:1:120, color=colors[1], label = "Agent-based simulation")
 	plot_hist!(ax_protein, 
 		reduce(vcat, res.outstates[:Cp_division].u); 
-		bins=0:1:120, color=colors[1], label = "Agent-based simulation")
+		bins=0:1:150, color=colors[1], label = "Agent-based simulation")
 end;
 
 # ╔═╡ 05d96141-f7d0-48e9-9d03-1cc91163fd8b
@@ -293,7 +294,7 @@ begin
 	kprod_ = 10.0 
 	b_ = 6.0
 	
-	span_ = (1e-4, 0.8)
+	span_ = (1e-4, 2.4)
 	
 	intparams = ( 
 	    abstol = 1e-4,
@@ -305,7 +306,7 @@ begin
 	
 	ddist = Beta(100)
 	
-	kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0), span_)
+	kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0) / u, (span_[1], min(1.0, s/s0)))
 	ker(s, s0) = solve(kernelf(s, s0), QuadGKJL(); intparams...).u
 	
 	function trapz(fx, xstep)
@@ -319,7 +320,7 @@ begin
 	
 	function volterra(ker, span, n)
 	    a, b = span
-	    h = (b-a)/n
+	    h = (b-a)/(n-1)
 	    x = range(a, stop=b, length=n)
 	    
 	    Xi = Float64[]
@@ -336,7 +337,7 @@ begin
 	end
 	
 	N = 50
-	sstep_ = (span_[2]-span_[1])/N
+	sstep_ = (span_[2]-span_[1])/(N-1)
 	srange_ = collect(range(span_[1], stop=span_[2], length=N))
 	A = volterra(ker, span_, N)
 	sn = trapz(Float64.(eigvecs(A)[:,end]), sstep_)
@@ -351,10 +352,10 @@ begin
 	
 	# Compute protein distribution for different birth sizes s0.
 	function rho(s_, s0_, s0)
-	    (1/psi(s0))*(s0/s_)*pdf(ddist, s0/s_)*phi(s_, s0_)*psi(s0_)
+	    (1/psi(s0))*(1/s_)*pdf(ddist, s0/s_)*phi(s_, s0_)*psi(s0_)
 	end
 
-	sintspan_ = [span_[1], 2.0]
+	sintspan_ = [span_[1], span_[2]]
 	# Birth protein counts. Use concentration homeostasis. 
 	dist(kprod, b, α, s) = NegativeBinomial(kprod/(α), 1/(1+b*s)) 
 	Pi(x, s) = pdf(dist(kprod_, b_, α_, s), x)
@@ -366,7 +367,7 @@ begin
 	    (u,p) -> Bpdf(x, x_, s0/u)*solve(rhoint(x, x_, u, s0), QuadGKJL(); intparams...).u *Pi(x_, u), (s0, sintspan_[end]))
 	Pi0(x, x_, s0)  = solve(Pi0int(x, x_, s0), QuadGKJL(); intparams...).u
 	
-	xs_ = collect(range(0, stop=100, step=5))
+	xs_ = collect(range(0, stop=150, step=5))
 	xstep_ = xs_[2] - xs_[1]
 	array_dists(x, s0) = map(x_ -> Pi0(x, x_, s0), xs_)
 	ss_ = range(sintspan_[1], stop=sintspan_[2], length=20)
@@ -387,7 +388,7 @@ begin
 	lines!(ax_protein, xs_, mat_s ./ mat_sx; color=colors[10], label="Analytical solution")
 	#Legend(fig[2,:], ax_protein; orientation=:horizontal)
 	xlims!(ax_protein, (0,  100))
-	xlims!(ax_size, (0.2,  0.8))
+	xlims!(ax_size, (0.2,  1.2))
 end;
 
 # ╔═╡ 07d7b398-34b8-4198-9f92-eb58763d04bf
@@ -596,7 +597,7 @@ end
 # ╟─35268085-c7d1-4683-8b31-2124c825c0e5
 # ╠═cd707a2c-795a-441d-8b51-019af0f7cfbf
 # ╠═05d96141-f7d0-48e9-9d03-1cc91163fd8b
-# ╟─b248142d-c524-4e5a-bc25-fbd61aba240b
+# ╠═b248142d-c524-4e5a-bc25-fbd61aba240b
 # ╠═4266ab25-5e95-4241-a257-eb93b6778af1
 # ╠═07d7b398-34b8-4198-9f92-eb58763d04bf
 # ╠═6e6e14a3-1199-431c-9716-4e518b251377

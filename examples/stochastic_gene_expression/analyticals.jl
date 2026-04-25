@@ -8,14 +8,14 @@ using Intervals
 using Interpolations
 
 α_ = 1.0
-kprod_ = 10.0 
+kprod_ = 10.0
 b_ = 6.0
-μ_ = 1.0
-cv_ = 0.2 
+μ_ = 0.5
+cv_ = 0.2
 
-span_ = (1e-4, 0.8)
+span_ = (1e-4, 2.5)
 
-intparams = ( 
+intparams = (
     abstol = 1e-4,
     reltol = 1e-4)
 
@@ -25,26 +25,26 @@ phi(s, s0) = γ(s, s0) * exp(-solve(γint(s, s0), QuadGKJL(); intparams...).u)
 
 ddist = Beta(100)
 
-kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0), span_)
+kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0) / u, (span_[1], min(1.0, s/s0)))
 ker(s, s0) = solve(kernelf(s, s0), QuadGKJL(); intparams...).u
 
 function trapz(fx, xstep)
     out = 0.0
     fxx = zip(fx, fx[2:end])
     for f_ in fxx
-        out += middle(f_...) * xstep 
+        out += middle(f_...) * xstep
     end
     return out
 end
 
 function volterra(ker, span, n)
     a, b = span
-    h = (b-a)/n
+    h = (b-a)/(n-1)
     x = range(a, stop=b, length=n)
-    
+
     Xi = Float64[]
     Ai = zeros(length(x), length(x))
-    
+
     for i in 1:n
         for j in range(1, n, step=1)
             Ai[i,j] = h*ker(x[i], x[j])
@@ -57,7 +57,7 @@ function volterra(ker, span, n)
 end
 
 N = 50
-sstep_ = (span_[2]-span_[1])/N
+sstep_ = (span_[2]-span_[1])/(N-1)
 srange_ = collect(range(span_[1], stop=span_[2], length=N))
 A = volterra(ker, span_, N)
 sn = trapz(Float64.(eigvecs(A)[:,end]), sstep_)
@@ -72,12 +72,12 @@ psi_tree_ = linear_interpolation(
 
 # Compute protein distribution for different birth sizes s0.
 function rho(s_, s0_, s0)
-    (1/psi(s0))*(s0/s_)*pdf(ddist, s0/s_)*phi(s_, s0_)*psi(s0_)
+    (1/psi(s0))*(1/s_)*pdf(ddist, s0/s_)*phi(s_, s0_)*psi(s0_)
 end
 
-sintspan_ = [span_[1], 1.8]
-# Birth protein counts... Use concentration homeostasis. 
-dist(kprod, b, α, s) = NegativeBinomial(kprod/(α), 1/(1+b*s)) 
+sintspan_ = [span_[1], span_[2]]
+# Birth protein counts. Use concentration homeostasis.
+dist(kprod, b, α, s) = NegativeBinomial(kprod/(α), 1/(1+b*s))
 Pi(x, s) = pdf(dist(kprod_, b_, α_, s), x)
 B(x, x_, θ) = pdf(Binomial(x_, θ), x)
 

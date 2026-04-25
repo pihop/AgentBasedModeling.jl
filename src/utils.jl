@@ -43,8 +43,8 @@ function get_time_dependent_vars(eqs)
     vars = Set()
     discvars = Set()
 
-    diffeqs = filter(x -> isdiffeq(x), eqs)
-    nondiffeqs = filter(x -> !isdiffeq(x), eqs)
+    diffeqs = filter(x -> MT.isdiffeq(x), eqs)
+    nondiffeqs = filter(x -> !MT.isdiffeq(x), eqs)
 
     for eq in diffeqs
         # If rhs 0 then we only have discrete jumps corresponding to the variable.
@@ -53,7 +53,7 @@ function get_time_dependent_vars(eqs)
             push!(discvars, vs...)
             continue
         end
-        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        vs_topush = filter(x -> !MT.isparameter(x), vs)
         push!(vars, vs_topush...)
 
     end
@@ -62,7 +62,7 @@ function get_time_dependent_vars(eqs)
         vs = get_variables(eq)
         # Are any of the variables continuous?
         anyvars = any(x -> !in(x, vars), vs)
-        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        vs_topush = filter(x -> !MT.isparameter(x), vs)
         push!(vars, vs_topush)
     end
 
@@ -90,7 +90,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
     havevrjs = false
     for (i, rx) in enumerate(rxs)
         empty!(rxvars)
-        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa SymbolicUtils.BasicSymbolic) && get_variables!(rxvars, rx.rate)
         @inbounds for rxvar in rxvars
             if (isequal(rxvar, get_iv(rs)) | in(rxvar, cont_time_vars))
                 isvrjvec[i] = true
@@ -114,7 +114,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
 
     for (i, rx) in enumerate(rxs)
         empty!(rxvars)
-        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa SymbolicUtils.BasicSymbolic) && get_variables!(rxvars, rx.rate)
 
         isvrj = isvrjvec[i]
         if (!isvrj) && ismassaction(rx, rs; rxvars, haveivdep = false, unknownset)
@@ -124,7 +124,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
             affect = Vector{Equation}()
             for (spec, stoich) in rx.netstoich
                 # don't change species that are constant or BCs
-                (!drop_dynamics(spec)) && push!(affect, spec ~ spec + stoich)
+                (!drop_dynamics(spec)) && push!(affect, spec ~ Pre(spec) + Pre(stoich))
             end
             if isvrj
                 push!(veqs, VariableRateJump(rl, affect))

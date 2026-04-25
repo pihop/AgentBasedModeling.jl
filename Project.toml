@@ -1,7 +1,7 @@
 name = "AgentBasedModeling"
 uuid = "e84d765a-14ea-40d5-a06e-f3dee76f2260"
-authors = ["Paul Piho <paul.piho@gmail.com>"]
 version = "0.1.0"
+authors = ["Paul Piho <paul.piho@gmail.com>"]
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
@@ -17,6 +17,7 @@ JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 OrdinaryDiffEqCore = "bbf590c4-e513-4bbe-9b18-05decba2e5d8"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
@@ -34,20 +35,8 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
-Accessors = "0.1.42"
-Catalyst = "14.4.1"
-CommonSolve = "0.2.4"
-Graphs = "1.12.1"
-InteractiveUtils = "1.11.0"
-MetaGraphsNext = "0.7.3"
-ModelingToolkit = "< 9.60"
-OrdinaryDiffEq = "6.92.0"
-OrdinaryDiffEqCore = "1.30.0"
-RecursiveArrayTools = "3.31.0"
-SafeTestsets = "0.1.0"
-StochasticDiffEq = "6.75.0"
-Test = "1.11.0"
-julia = "1.10"
+ModelingToolkit = "11.22.0"
+ModelingToolkitBase = "1.31.0"
 
 [extras]
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"

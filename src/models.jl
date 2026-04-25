@@ -16,7 +16,7 @@ function variable_subs(vars, pstate, symbs)
     pstatesubs = Any[x => y for (x, y) in zip(symbs, pstate)]
     varstosub = Dict(var.parameter => var.symbf for var in vars)
 
-    out = [] 
+    out = []
     n = 1
 
     while true
@@ -25,14 +25,15 @@ function variable_subs(vars, pstate, symbs)
             error("Substitution of variables failed to resolve symbols $(collect(keys(varstosub))). This could result from unspecified parameter values or partially specified transitions.")
         end
 
-        for key in keys(varstosub) 
-            # Substitute variable values in pstatesubs to variable expression. 
+        for key in keys(varstosub)
+            # Substitute variable values in pstatesubs to variable expression.
             # If no symbolic variables add the var to pstatesubs and output.
             # Keep iterating till no symbolic variables left.
-            val = varstosub[key](pstatesubs)
+            val = varstosub[key](Dict(pstatesubs))
             vs = Symbolics.get_variables(val)
 
             isempty(vs) && begin
+                val = Symbolics.build_function(val; expression=Val{false})()
                 push!(pstatesubs, key => val)
                 push!(out, key => val)
                 pop!(varstosub, key)
@@ -40,7 +41,7 @@ function variable_subs(vars, pstate, symbs)
         end
         n += 1
     end
-    return out 
+    return out
 end
 
 function replace_with_connection(exprs, cnx)
@@ -104,7 +105,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
 
     ispopdep = false
 
-    if !isempty(union(ModelingToolkit.get_variables(itxdef.rx.rx.rate), unknowns(modelrn)))
+    if !isempty(union(MT.get_variables(itxdef.rx.rx.rate), unknowns(modelrn)))
         ispopdep = true
     end
 
@@ -127,7 +128,8 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
     pmod = Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}[]
 
     for (i,p) in enumerate(ps)
-        if (p isa Real) 
+        p = Symbolics.symbolic_to_float(p)
+        if (p isa Real)
             pvec[i] = p
             continue
         elseif haskey(subsrules_, p)
@@ -202,12 +204,12 @@ struct HybridSDEDynamics{cType, dType}
     discrete::dType
 end
 
-function ModelingToolkit.unknowns(hybrid::HybridSDEDynamics)
+function MT.unknowns(hybrid::HybridSDEDynamics)
     uks = unknowns(hybrid.continuous)
 #    filter(x -> !ModelingToolkit.isbrownian(x), uks)
 end
 
-function ModelingToolkit.parameters(hybrid::HybridSDEDynamics)
+function MT.parameters(hybrid::HybridSDEDynamics)
 #    return unique([parameters(hybrid.continuous)..., parameters(hybrid.discrete)...])
 end
 
@@ -217,11 +219,11 @@ struct AgentDynamics{D,N}
     symtoidx::Dict{Num, Tuple{Bool, Int}} 
 end
 
-function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
-    @error "Extending SDE with reaction network currently requires the following workaround: specify 
-        HybridSDEDynamics(continuous::SDESystem, discrete::ReactionSystem) as the agent dynamics and construct
-        the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
-end
+#function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
+#    @error "Extending SDE with reaction network currently requires the following workaround: specify 
+#        HybridSDEDynamics(continuous::SDESystem, discrete::ReactionSystem) as the agent dynamics and construct
+#        the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
+#end
 
 function AgentDynamics(dynamics, constants) 
     keys = Num[]
@@ -299,24 +301,30 @@ function make_trait_problems(model::AgentsModel, params;)
             jumpaggregator=params.jumpaggregator, params.solverkws...) for trait in model.traits)
 end
 
-Problems = Union{ODEProblem, SDEProblem, JumpProblem}
-Systems = Union{ODESystem, SDESystem, JumpSystem}
-ProblemSystemDict = Dict(ODESystem => ODEProblem, SDESystem => SDEProblem, JumpSystem => JumpProblem)
-
-function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwargs...) where {S <: Systems, N}
+function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwargs...) where {S <: MT.AbstractSystem, N}
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
         push!(keys, c)
         push!(vals, (true, i))
     end
-   
+
     for (i, c) in enumerate(unknowns(dynamics.dynamics))
         push!(keys, c)
         push!(vals, (false, i))
     end
-
-    Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
+    sys = complete(dynamics.dynamics)
+    u0 = zeros(length(unknowns(dynamics.dynamics)))
+    sys_params = parameters(sys)
+    relevant_ps = filter(pair -> any(isequal(first(pair), p) for p in sys_params), ps)
+    pmap = merge(isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0), Dict(relevant_ps))
+    noise = MT.get_noise_eqs(sys)
+    prob = if noise !== nothing && !isempty(noise)
+        SDEProblem{true}(sys, pmap, tspan)
+    else
+        ODEProblem{true}(sys, pmap, tspan)
+    end
+    Trait(sym, prob, Dict(keys .=> vals))
 end
 
 function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics{cType, dType}, N}, tspan, ps; jumpaggregator) where {cType, dType, N}
@@ -379,27 +387,35 @@ function make_hybrid(rs, init, tspan, params;
         combinatoric_ratelaws=Catalyst.get_combinatoric_ratelaws(rs),
         include_zero_odes=true)
     # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
-    
+
     flatrs = Catalyst.flatten(rs)
     eqs = Any[assemble_hybrid_jumps(flatrs)...]
     ists, ispcs = Catalyst.get_indep_sts(flatrs)
     eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
         remove_conserved = false)
 
+    iv = get_iv(flatrs)
+    D = Differential(iv)
+
+    for u in us
+        has_ode = any(eq -> eq isa Equation && isequal(eq.lhs, D(u)), eqs)
+        if !has_ode
+            push!(eqs, D(u) ~ 0)
+        end
+        # if D(u) not equations add D(u) ~ 0
+    end
+
     jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
             observed = obs,
             name,
-            defaults = MT._merge(Dict(), MT.defaults(flatrs)),
+            initial_conditions = MT.initial_conditions(flatrs),
             checks,
             discrete_events = MT.discrete_events(flatrs),
             continuous_events = MT.continuous_events(flatrs),)
 
-    u0map = symmap_to_varmap(rs, init)
-    pmap = symmap_to_varmap(rs, params)
-
-    prob = ODEProblem(complete(jsys), u0map, tspan, pmap; )
-#    jprob = JumpInputs(complete(jsys), prob)
-    return JumpProblem(complete(jsys), prob)
+    cjsys = complete(jsys)
+    op = merge(Dict(unknowns(cjsys) .=> init), Dict{Any,Any}(params))
+    return JumpProblem(cjsys, op, tspan; aggregator = jumpaggregator, check_compatibility = false)
 end
 
 
@@ -417,15 +433,15 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
 
     @named rs = ReactionSystem(
         [rxs; eqs], 
-        ModelingToolkit.get_iv(hdyn.discrete), 
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(hdyn)),
+        MT.get_iv(hdyn.discrete), 
+        filter(x -> !MT.isbrownian(x), unknowns(hdyn)),
         ps_set)
 
     @named sde = SDESystem(
         eqs,
         vcat(hdyn.continuous.noiseeqs...),
-        ModelingToolkit.get_iv(hdyn.continuous),
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(rs)),
+        MT.get_iv(hdyn.continuous),
+        filter(x -> !MT.isbrownian(x), unknowns(rs)),
         ps_set)
 
     eqs = Any[assemble_hybrid_jumps(rs)...]
@@ -434,11 +450,8 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
 
     jsys = JumpSystem(eqs, get_iv(rs), us, ps; name)
 
-    u0map = symmap_to_varmap(sde, init)
-    pmap = symmap_to_varmap(sde, params)
-
-    prob = SDEProblem(complete(sde), u0map, tspan, pmap)
-    JumpProblem(complete(jsys), prob, jumpaggregator)
+    op = merge(Dict{Any,Any}(init), Dict{Any,Any}(params))
+    JumpProblem(complete(jsys), op, tspan; aggregator = jumpaggregator, check_compatibility = false)
 end
 
 let x = Threads.Atomic{Int}(0)

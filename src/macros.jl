@@ -84,6 +84,20 @@ function process_vars(ex, vars)
     push!(vars.args, :(AgentBasedModeling.Variable($var, $fnc_)))
 end
 
+function _get_sexpr(species_declared, iv_sym = Catalyst.DEFAULT_IV_SYM)
+    isempty(species_declared) && return :()
+    sexprs = Expr(:macrocall, Symbol("@species"), LineNumberNode(0))
+    foreach(s -> s isa Symbol && push!(sexprs.args, Expr(:call, s, iv_sym)), species_declared)
+    sexprs
+end
+
+function _get_pexpr(params_declared)
+    isempty(params_declared) && return :()
+    pexprs = Expr(:macrocall, Symbol("@parameters"), LineNumberNode(0))
+    foreach(p -> push!(pexprs.args, p), params_declared)
+    pexprs
+end
+
 function process_population_itx(ex)
     itx = :()
     ttran = :(TraitTransition(nothing))
@@ -103,10 +117,10 @@ function process_population_itx(ex)
     options = Dict(map(arg -> Symbol(String(arg.args[1])[2:end]) => arg,
                        option_lines))
     species_declared = Catalyst.extract_syms(options, :species)
-    sexprs = Catalyst.get_sexpr(species_declared, Dict{Symbol, Expr}())
+    sexprs = _get_sexpr(species_declared)
 
     params_declared = Catalyst.extract_syms(options, :parameters)
-    pexprs = Catalyst.get_pexpr(params_declared, Dict{Symbol, Expr}())
+    pexprs = _get_pexpr(params_declared)
 
     iv = :(@variables $(Catalyst.DEFAULT_IV_SYM))
 
