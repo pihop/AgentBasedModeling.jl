@@ -13,6 +13,7 @@ begin
     Pkg.add([
 		Pkg.PackageSpec(name="OrdinaryDiffEq"),
         Pkg.PackageSpec(name="Catalyst"),
+        Pkg.PackageSpec(name="ModelingToolkit"),
 		Pkg.PackageSpec(name="Distributions"),
 		Pkg.PackageSpec(name="CairoMakie"),
 		Pkg.PackageSpec(name="GraphMakie"),	
@@ -28,6 +29,7 @@ begin
     ])
 	using OrdinaryDiffEq
 	using AgentBasedModeling
+    using ModelingToolkit
 	using Catalyst
 	using Distributions
 	using LinearAlgebra
