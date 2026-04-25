@@ -16,7 +16,7 @@ function variable_subs(vars, pstate, symbs)
     pstatesubs = Any[x => y for (x, y) in zip(symbs, pstate)]
     varstosub = Dict(var.parameter => var.symbf for var in vars)
 
-    out = [] 
+    out = []
     n = 1
 
     while true
@@ -25,14 +25,15 @@ function variable_subs(vars, pstate, symbs)
             error("Substitution of variables failed to resolve symbols $(collect(keys(varstosub))). This could result from unspecified parameter values or partially specified transitions.")
         end
 
-        for key in keys(varstosub) 
-            # Substitute variable values in pstatesubs to variable expression. 
+        for key in keys(varstosub)
+            # Substitute variable values in pstatesubs to variable expression.
             # If no symbolic variables add the var to pstatesubs and output.
             # Keep iterating till no symbolic variables left.
-            val = varstosub[key](pstatesubs)
+            val = varstosub[key](Dict(pstatesubs))
             vs = Symbolics.get_variables(val)
 
             isempty(vs) && begin
+                val = Symbolics.build_function(val; expression=Val{false})()
                 push!(pstatesubs, key => val)
                 push!(out, key => val)
                 pop!(varstosub, key)
@@ -40,7 +41,7 @@ function variable_subs(vars, pstate, symbs)
         end
         n += 1
     end
-    return out 
+    return out
 end
 
 function replace_with_connection(exprs, cnx)
@@ -127,7 +128,8 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
     pmod = Tuple{Num, Int, Tuple{Int, Num, Tuple{Bool, Int64}}}[]
 
     for (i,p) in enumerate(ps)
-        if (p isa Real) 
+        p = Symbolics.symbolic_to_float(p)
+        if (p isa Real)
             pvec[i] = p
             continue
         elseif haskey(subsrules_, p)
@@ -364,7 +366,6 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
             JumpProblem(jin), Dict(keys .=> vals))
     end
 
-    print(dynamics)
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
     Trait(sym, prob, Dict(keys .=> vals))
 end
@@ -386,12 +387,23 @@ function make_hybrid(rs, init, tspan, params;
         combinatoric_ratelaws=Catalyst.get_combinatoric_ratelaws(rs),
         include_zero_odes=true)
     # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
-    
+
     flatrs = Catalyst.flatten(rs)
     eqs = Any[assemble_hybrid_jumps(flatrs)...]
     ists, ispcs = Catalyst.get_indep_sts(flatrs)
     eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
         remove_conserved = false)
+
+    iv = get_iv(flatrs)
+    D = Differential(iv)
+
+    for u in us
+        has_ode = any(eq -> eq isa Equation && isequal(eq.lhs, D(u)), eqs)
+        if !has_ode
+            push!(eqs, D(u) ~ 0)
+        end
+        # if D(u) not equations add D(u) ~ 0
+    end
 
     jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
             observed = obs,
@@ -401,9 +413,9 @@ function make_hybrid(rs, init, tspan, params;
             discrete_events = MT.discrete_events(flatrs),
             continuous_events = MT.continuous_events(flatrs),)
 
-    prob = ODEProblem(complete(jsys), init, tspan, params; )
-#    jprob = JumpInputs(complete(jsys), prob)
-    return JumpProblem(complete(jsys), prob)
+    cjsys = complete(jsys)
+    op = merge(Dict(unknowns(cjsys) .=> init), Dict{Any,Any}(params))
+    return JumpProblem(cjsys, op, tspan; aggregator = jumpaggregator, check_compatibility = false)
 end
 
 
@@ -438,8 +450,8 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
 
     jsys = JumpSystem(eqs, get_iv(rs), us, ps; name)
 
-    prob = SDEProblem(complete(sde), init, tspan, params)
-    JumpProblem(complete(jsys), prob, jumpaggregator)
+    op = merge(Dict{Any,Any}(init), Dict{Any,Any}(params))
+    JumpProblem(complete(jsys), op, tspan; aggregator = jumpaggregator, check_compatibility = false)
 end
 
 let x = Threads.Atomic{Int}(0)

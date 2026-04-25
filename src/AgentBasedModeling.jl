@@ -13,8 +13,8 @@ module AgentBasedModeling
     using OrdinaryDiffEqCore
     using StochasticDiffEq
 
-    using ModelingToolkitBase
-    MT = ModelingToolkitBase
+    using ModelingToolkit
+    MT = ModelingToolkit
     using SciMLBase
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools

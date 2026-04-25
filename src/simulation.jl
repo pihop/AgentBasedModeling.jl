@@ -159,12 +159,8 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
         interp = setproperties(interp, (timeseries = us, ts = ts, ks = ks)) 
     end
     
-    interp isa StochasticDiffEq.LinearInterpolationData &&  begin
-        interp = setproperties(interp, (u = us, t = ts)) 
-    end
-
-    (interp isa SciMLBase.LinearInterpolation) || (interp isa SciMLBase.ConstantInterpolation) && begin
-        interp = setproperties(interp, (u = us, t = ts)) 
+    if interp isa SciMLBase.LinearInterpolation || interp isa SciMLBase.ConstantInterpolation
+        interp = setproperties(interp, (u = us, t = ts))
     end
 
     agent.simulation = SciMLBase.build_solution(
@@ -225,9 +221,9 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, params::Sim
             new[agent][agent_.uid] = agent_
             continue
         end
-        alltraits_ = Tuple(t[1] => Symbolics.unwrap.(substitute(t[2], varsubs)) for t in new_traits[i])
-        tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in unknowns(dyn))
-        c = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], alltraits_)...) for x in cts)
+        alltraits_ = Tuple(t[1] => substitute(t[2], Dict(varsubs)) for t in new_traits[i])
+        tr = Tuple(x => Symbolics.unwrap(substitute(Num(x), Dict(alltraits_))) for x in unknowns(dyn))
+        c = Tuple(x => Symbolics.unwrap(substitute(x, Dict(alltraits_))) for x in cts)
         agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.uid)
         new[agent][agent_.uid] = agent_
     end
@@ -323,7 +319,8 @@ function log_outstates!(srx::SimulationReaction, state, rxtime, agents, results:
             !in(name, keys(savevalues)) && begin 
                 savevalues[name] = Float64[]
             end
-            push!(savevalues[name], Float64(agent.init_trait[idx][2]))
+#            print(typeof(agent.init_trait[idx][2]))
+            push!(savevalues[name], Symbolics.symbolic_to_float(agent.init_trait[idx][2]))
         end
     end
 
@@ -420,8 +417,8 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
         cts = model.traitdefs[agent].constants
 
         init_traits_dict = Dict(init_traits)
-        c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits_dict)...) for x in cts)
-        tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits_dict)...) for x in unknowns(dyn))
+        c = Tuple(x => Symbolics.unwrap(substitute(x, init_traits_dict)) for x in cts)
+        tr = Tuple(x => Symbolics.unwrap(substitute(Num(x), init_traits_dict)) for x in unknowns(dyn))
 
         agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}(), nothing)
         pop[agent][agent_.uid] = agent_ 
@@ -512,8 +509,8 @@ function simulate_step!(state, params; results::Union{Nothing, SimulationResults
         state.t = next_rx_time 
         update_pop_state!(state)
 
-    elseif next_rx_time < tend && rxidx == 0 
-        state.t = next_rx_time 
+    elseif next_rx_time < tend && rxidx == 0
+        state.t = next_rx_time
     else 
         state.t = tend 
         tend = minimum([state.t + params.Δt, params.tspan[end]])
@@ -547,7 +544,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
         while true
             sample_aggregates!(state.srxs, state, state.model, params, (state.t, tend), recompute=recompute_bounds)
             next_rx_time, rx_channel = findmin(x -> x.next_rx_time, state.srxs)
-            rxidx = state.srxs[rx_channel].next_rx 
+            rxidx = state.srxs[rx_channel].next_rx
 
             if next_rx_time < tend && rxidx != 0
                 srx = state.srxs[rx_channel].rxs[rxidx]

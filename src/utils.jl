@@ -124,7 +124,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
             affect = Vector{Equation}()
             for (spec, stoich) in rx.netstoich
                 # don't change species that are constant or BCs
-                (!drop_dynamics(spec)) && push!(affect, spec ~ spec + stoich)
+                (!drop_dynamics(spec)) && push!(affect, spec ~ Pre(spec) + Pre(stoich))
             end
             if isvrj
                 push!(veqs, VariableRateJump(rl, affect))

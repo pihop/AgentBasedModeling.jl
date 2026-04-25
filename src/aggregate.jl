@@ -59,7 +59,7 @@ function compute_extrande_bounds!(aggregate::PopulationItxAggregator{ExtrandeMet
     @unpack pvec, pmod, subsrules = rx.pitx
     ratefmax, Lf, ratef = get_bound_functions(aggregate, rx, tspan)
 
-    if aggregate.sampler.trait_indep 
+    if aggregate.sampler.trait_indep
         # If the bound is independent of trait values the same bound holds for all reactions.
         substrates = AgentState[get_agent(state, agent) for agent in rx.substrates]
 
