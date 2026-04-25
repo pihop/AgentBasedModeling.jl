@@ -34,7 +34,7 @@ end
 @named cont_dynamics = ODESystem([D(s) ~ α*s, D(τ) ~ 1.0, D(P) ~ 0.0], t)
 Cell = AgentDynamics((cont_dynamics, disc_dynamics), (s0, ))
 
-gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/μ, μ*cv), x))
+gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/cv, μ*cv), x))
 
 # Adder rule for cell division.
 γdiv(μ, cv, s, s0, α) = α * s * gammahaz(μ, cv, s - s0)
@@ -83,7 +83,7 @@ tspan_pop = (0.0, 20.0)
 Δt = 1.0
 
 simulation_params = SimulationParameters(
-    [α => 1.0, kprod => 10.0, b => 6.0, μ => 1.0, cv => 0.2, L => 0.1], 
+    [α => 1.0, kprod => 10.0, b => 6.0, μ => 0.5, cv => 0.2, L => 0.01],
     tspan_pop, 
     Δt, 
     Rodas5(); 

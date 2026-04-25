@@ -67,7 +67,6 @@ begin
 	    @species p(t)
 	    @variables s(t)
 	    @equations begin
-	        D(p) ~ 0.0
 	        D(s) ~ α*s
 	    end
 	    s*hill(p, kprod, s*K, 2) + d, 0 --> p

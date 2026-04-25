@@ -66,13 +66,11 @@ begin
 	D = Differential(t)
 		
 	cell_dynamics = @reaction_network begin
-		@species s(t) τ(t) p(t) N(t) InfCount(t)
+        @variables s(t) τ(t)
+		@species p(t) N(t) InfCount(t)
 	    @equations begin
 	        D(s) ~ hill(N, α, K, 1.0)*s
-	        D(τ) ~ 1.0 
-	        D(p) ~ 0.0
-	        D(N) ~ 0.0
-	        D(InfCount) ~ 0.0
+	        D(τ) ~ 1.0
 	    end
 	    kprod, p + N --> 2*p
 	    hill(N, α, K, 1), N --> 0
