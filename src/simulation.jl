@@ -383,7 +383,7 @@ function log_snapshot!(time, saving, state::SimulationState, results::Simulation
                 constsyms = first.(state.model.traitdefs[agent.sym].constants)
                 if in(save.trait, Set(constsyms))
                     idx = indexof(save.trait, constsyms)
-                    push!(snapshot, agent.consts[idx][2])
+                    push!(snapshot, Symbolics.symbolic_to_float(agent.consts[idx][2]))
                 end
             elseif save isa PopulationSnapshot
                 isequal(agent.sym, save.agent) ? push!(snapshot_n, agent.sym) : nothing
