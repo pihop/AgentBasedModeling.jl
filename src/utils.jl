@@ -53,7 +53,7 @@ function get_time_dependent_vars(eqs)
             push!(discvars, vs...)
             continue
         end
-        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        vs_topush = filter(x -> !MT.isparameter(x), vs)
         push!(vars, vs_topush...)
 
     end
@@ -62,7 +62,7 @@ function get_time_dependent_vars(eqs)
         vs = get_variables(eq)
         # Are any of the variables continuous?
         anyvars = any(x -> !in(x, vars), vs)
-        vs_topush = filter(x -> !ModelingToolkit.isparameter(x), vs)
+        vs_topush = filter(x -> !MT.isparameter(x), vs)
         push!(vars, vs_topush)
     end
 
