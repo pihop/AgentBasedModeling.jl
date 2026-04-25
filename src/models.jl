@@ -401,10 +401,7 @@ function make_hybrid(rs, init, tspan, params;
             discrete_events = MT.discrete_events(flatrs),
             continuous_events = MT.continuous_events(flatrs),)
 
-    u0map = symmap_to_varmap(rs, init)
-    pmap = symmap_to_varmap(rs, params)
-
-    prob = ODEProblem(complete(jsys), u0map, tspan, pmap; )
+    prob = ODEProblem(complete(jsys), init, tspan, params; )
 #    jprob = JumpInputs(complete(jsys), prob)
     return JumpProblem(complete(jsys), prob)
 end
@@ -441,10 +438,7 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
 
     jsys = JumpSystem(eqs, get_iv(rs), us, ps; name)
 
-    u0map = symmap_to_varmap(sde, init)
-    pmap = symmap_to_varmap(sde, params)
-
-    prob = SDEProblem(complete(sde), u0map, tspan, pmap)
+    prob = SDEProblem(complete(sde), init, tspan, params)
     JumpProblem(complete(jsys), prob, jumpaggregator)
 end
 
