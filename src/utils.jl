@@ -43,8 +43,8 @@ function get_time_dependent_vars(eqs)
     vars = Set()
     discvars = Set()
 
-    diffeqs = filter(x -> isdiffeq(x), eqs)
-    nondiffeqs = filter(x -> !isdiffeq(x), eqs)
+    diffeqs = filter(x -> MT.isdiffeq(x), eqs)
+    nondiffeqs = filter(x -> !MT.isdiffeq(x), eqs)
 
     for eq in diffeqs
         # If rhs 0 then we only have discrete jumps corresponding to the variable.
