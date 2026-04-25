@@ -90,7 +90,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
     havevrjs = false
     for (i, rx) in enumerate(rxs)
         empty!(rxvars)
-        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa SymbolicUtils.Symbolic) && get_variables!(rxvars, rx.rate)
         @inbounds for rxvar in rxvars
             if (isequal(rxvar, get_iv(rs)) | in(rxvar, cont_time_vars))
                 isvrjvec[i] = true
@@ -114,7 +114,7 @@ function assemble_hybrid_jumps(rs; combinatoric_ratelaws = true)
 
     for (i, rx) in enumerate(rxs)
         empty!(rxvars)
-        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa SymbolicUtils.Symbolic) && get_variables!(rxvars, rx.rate)
 
         isvrj = isvrjvec[i]
         if (!isvrj) && ismassaction(rx, rs; rxvars, haveivdep = false, unknownset)

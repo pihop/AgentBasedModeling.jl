@@ -104,7 +104,7 @@ function PopulationItx(itxdef::PopulationItxDef{nType,rxType,sType,pType,cType,v
 
     ispopdep = false
 
-    if !isempty(union(ModelingToolkit.get_variables(itxdef.rx.rx.rate), unknowns(modelrn)))
+    if !isempty(union(MT.get_variables(itxdef.rx.rx.rate), unknowns(modelrn)))
         ispopdep = true
     end
 
@@ -202,12 +202,12 @@ struct HybridSDEDynamics{cType, dType}
     discrete::dType
 end
 
-function ModelingToolkit.unknowns(hybrid::HybridSDEDynamics)
+function MT.unknowns(hybrid::HybridSDEDynamics)
     uks = unknowns(hybrid.continuous)
 #    filter(x -> !ModelingToolkit.isbrownian(x), uks)
 end
 
-function ModelingToolkit.parameters(hybrid::HybridSDEDynamics)
+function MT.parameters(hybrid::HybridSDEDynamics)
 #    return unique([parameters(hybrid.continuous)..., parameters(hybrid.discrete)...])
 end
 
@@ -217,11 +217,11 @@ struct AgentDynamics{D,N}
     symtoidx::Dict{Num, Tuple{Bool, Int}} 
 end
 
-function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
-    @error "Extending SDE with reaction network currently requires the following workaround: specify 
-        HybridSDEDynamics(continuous::SDESystem, discrete::ReactionSystem) as the agent dynamics and construct
-        the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
-end
+#function Catalyst.extend(cont::SDESystem, disc::ReactionSystem)
+#    @error "Extending SDE with reaction network currently requires the following workaround: specify 
+#        HybridSDEDynamics(continuous::SDESystem, discrete::ReactionSystem) as the agent dynamics and construct
+#        the AgentDynamics struct by calling AgentDynamics((hybrid_sde, ), constants)."
+#end
 
 function AgentDynamics(dynamics, constants) 
     keys = Num[]
@@ -299,24 +299,30 @@ function make_trait_problems(model::AgentsModel, params;)
             jumpaggregator=params.jumpaggregator, params.solverkws...) for trait in model.traits)
 end
 
-Problems = Union{ODEProblem, SDEProblem, JumpProblem}
-Systems = Union{ODESystem, SDESystem, JumpSystem}
-ProblemSystemDict = Dict(ODESystem => ODEProblem, SDESystem => SDEProblem, JumpSystem => JumpProblem)
-
-function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwargs...) where {S <: Systems, N}
+function make_trait_problem(sym, dynamics::AgentDynamics{S, N}, tspan, ps; kwargs...) where {S <: MT.AbstractSystem, N}
     keys = Num[]
     vals = Tuple{Bool, Int}[]
     for (i, c) in enumerate(dynamics.constants)
         push!(keys, c)
         push!(vals, (true, i))
     end
-   
+
     for (i, c) in enumerate(unknowns(dynamics.dynamics))
         push!(keys, c)
         push!(vals, (false, i))
     end
-
-    Trait(sym, ProblemSystemDict[S]{true}(complete(dynamics.dynamics), zeros(length(unknowns(dynamics.dynamics))), tspan, ps), Dict(keys .=> vals))
+    sys = complete(dynamics.dynamics)
+    u0 = zeros(length(unknowns(dynamics.dynamics)))
+    sys_params = parameters(sys)
+    relevant_ps = filter(pair -> any(isequal(first(pair), p) for p in sys_params), ps)
+    pmap = merge(isempty(u0) ? Dict() : Dict(unknowns(sys) .=> u0), Dict(relevant_ps))
+    noise = MT.get_noise_eqs(sys)
+    prob = if noise !== nothing && !isempty(noise)
+        SDEProblem{true}(sys, pmap, tspan)
+    else
+        ODEProblem{true}(sys, pmap, tspan)
+    end
+    Trait(sym, prob, Dict(keys .=> vals))
 end
 
 function make_trait_problem(sym, dynamics::AgentDynamics{HybridSDEDynamics{cType, dType}, N}, tspan, ps; jumpaggregator) where {cType, dType, N}
@@ -358,6 +364,7 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
             JumpProblem(jin), Dict(keys .=> vals))
     end
 
+    print(dynamics)
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
     Trait(sym, prob, Dict(keys .=> vals))
 end
@@ -417,15 +424,15 @@ function make_hybrid(hdyn::HybridSDEDynamics, init, tspan, params;
 
     @named rs = ReactionSystem(
         [rxs; eqs], 
-        ModelingToolkit.get_iv(hdyn.discrete), 
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(hdyn)),
+        MT.get_iv(hdyn.discrete), 
+        filter(x -> !MT.isbrownian(x), unknowns(hdyn)),
         ps_set)
 
     @named sde = SDESystem(
         eqs,
         vcat(hdyn.continuous.noiseeqs...),
-        ModelingToolkit.get_iv(hdyn.continuous),
-        filter(x -> !ModelingToolkit.isbrownian(x), unknowns(rs)),
+        MT.get_iv(hdyn.continuous),
+        filter(x -> !MT.isbrownian(x), unknowns(rs)),
         ps_set)
 
     eqs = Any[assemble_hybrid_jumps(rs)...]

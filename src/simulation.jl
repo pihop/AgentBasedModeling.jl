@@ -118,7 +118,7 @@ end
 
 function simulate_internal(problem, agent, init, tspan, params; model, kwargs...)
     unk = unknowns(model.traitdefs[agent.sym].dynamics)
-    u0map = ModelingToolkit.varmap_to_vars(init, unk)
+    u0map = MT.varmap_to_vars(Dict(init), unk)
     prob = remake(problem, u0=u0map, tspan=tspan)
 
     if (problem isa JumpProblem && problem.prob isa DiscreteProblem)
@@ -419,8 +419,9 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
         dyn = model.traitdefs[agent].dynamics
         cts = model.traitdefs[agent].constants
 
-        c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits)...) for x in cts)
-        tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits)...) for x in unknowns(dyn))
+        init_traits_dict = Dict(init_traits)
+        c = Tuple(x => Symbolics.unwrap.(substitute([x, ], init_traits_dict)...) for x in cts)
+        tr = Tuple(x => Symbolics.unwrap.(substitute([Num(x), ], init_traits_dict)...) for x in unknowns(dyn))
 
         agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}(), nothing)
         pop[agent][agent_.uid] = agent_ 
@@ -592,7 +593,7 @@ function simulate(modeldef::AgentsModel, init_pop, params::SimulationParameters;
     catch e
         if e isa InterruptException
             println("Simulation interrupted! Saving results.")
-            log_snapshot!(state.t, params.snapshot, state, model, results)
+            log_snapshot!(state.t, params.snapshot, state, results)
             results.tend = state.t
 
             trace_agents && push_to_pop!(all_agents, state.pop)

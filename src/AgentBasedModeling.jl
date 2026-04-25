@@ -8,15 +8,14 @@ module AgentBasedModeling
     using JumpProcesses
     import JumpProcesses: JumpProblem, extend_problem
     using Symbolics
-    import Symbolics: Symbolic
     using SymbolicUtils
     using OrdinaryDiffEq
     using OrdinaryDiffEqCore
     using StochasticDiffEq
 
-#    using ModelingToolkit
-    MT = ModelingToolkit
-    using SciMLBase 
+    using ModelingToolkitBase
+    MT = ModelingToolkitBase
+    using SciMLBase
     using SciMLBase:AbstractTimeseriesSolution,interp_summary
     using RecursiveArrayTools
 
@@ -31,7 +30,7 @@ module AgentBasedModeling
     using MetaGraphsNext
 
     using Base.Threads
-    
+
     const idType = UInt
 
     const DEFAULT_RNG = Random.default_rng()
