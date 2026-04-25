@@ -396,7 +396,7 @@ function make_hybrid(rs, init, tspan, params;
     jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
             observed = obs,
             name,
-            defaults = merge(Dict(), MT.defaults(flatrs)),
+            initial_conditions = merge(Dict(), MT.get_defaults(flatrs)),
             checks,
             discrete_events = MT.discrete_events(flatrs),
             continuous_events = MT.continuous_events(flatrs),)
