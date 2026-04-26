@@ -8,7 +8,7 @@ using InteractiveUtils
 begin
     import Pkg
     # activate a temporary environment
-    Pkg.activate(mktempdir())
+#    Pkg.activate(mktempdir())
     Pkg.add([
         Pkg.PackageSpec(name="Catalyst"),
         Pkg.PackageSpec(name="ModelingToolkit"),
@@ -22,7 +22,7 @@ begin
 		Pkg.PackageSpec(name="GraphMakie"),
 		Pkg.PackageSpec(name="StatsBase"),
 		Pkg.PackageSpec(name="Interpolations"),
-		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
+#		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
     ])
 	using AgentBasedModeling
 	using Catalyst
@@ -356,15 +356,21 @@ begin
 	    x1 = xs[end] 
 	    m = y1 / x1
 	
+	    detrend = collect(zip(xs, ys .- m .* xs))
+	
+	    # Guard: if y1 ≈ 0, range_ would have step=0 → skip smoothing
+	    if abs(y1) < 1e-10
+	        return Point.(detrend)
+	    end
+	
 	    nbins = 50
 	
 	    range_ = range(0.0, stop=y1, length=nbins)
 	    bins = collect(zip(range_, range_[2:end]))
 	
-	    binsx = [[] for i = 1:length(bins)] 
-	    detrend = zip(xs, ys .- m .* xs)
+	    binsx = [[] for i = 1:length(bins)]
 	
-	    for (x, y) in detrend 
+	    for (x, y) in detrend
 	        idx = findfirst(b -> b[1] < x < b[2], bins)
 	        isnothing(idx) && continue
 	        push!(binsx[idx], y)

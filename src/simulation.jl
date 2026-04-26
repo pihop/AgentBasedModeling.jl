@@ -222,8 +222,8 @@ function compute_new_agents(srx::srxType, state::sType, time::tType, params::Sim
             continue
         end
         alltraits_ = Tuple(t[1] => substitute(t[2], Dict(varsubs)) for t in new_traits[i])
-        tr = Tuple(x => Symbolics.unwrap(substitute(Num(x), Dict(alltraits_))) for x in unknowns(dyn))
-        c = Tuple(x => Symbolics.unwrap(substitute(x, Dict(alltraits_))) for x in cts)
+        tr = Tuple(x => Symbolics.symbolic_to_float(Symbolics.unwrap(substitute(Num(x), Dict(alltraits_)))) for x in unknowns(dyn))
+        c = Tuple(x => Symbolics.symbolic_to_float(Symbolics.unwrap(substitute(x, Dict(alltraits_)))) for x in cts)
         agent_ = AgentState(time, agent, tr, c, Vector{Tuple{Num, idType}}(getsymid.(substrates)), srx.uid)
         new[agent][agent_.uid] = agent_
     end
@@ -319,8 +319,7 @@ function log_outstates!(srx::SimulationReaction, state, rxtime, agents, results:
             !in(name, keys(savevalues)) && begin 
                 savevalues[name] = Float64[]
             end
-#            print(typeof(agent.init_trait[idx][2]))
-            push!(savevalues[name], Symbolics.symbolic_to_float(agent.init_trait[idx][2]))
+            push!(savevalues[name], agent.init_trait[idx][2])
         end
     end
 
@@ -383,7 +382,7 @@ function log_snapshot!(time, saving, state::SimulationState, results::Simulation
                 constsyms = first.(state.model.traitdefs[agent.sym].constants)
                 if in(save.trait, Set(constsyms))
                     idx = indexof(save.trait, constsyms)
-                    push!(snapshot, Symbolics.symbolic_to_float(agent.consts[idx][2]))
+                    push!(snapshot, agent.consts[idx][2])
                 end
             elseif save isa PopulationSnapshot
                 isequal(agent.sym, save.agent) ? push!(snapshot_n, agent.sym) : nothing
@@ -391,8 +390,9 @@ function log_snapshot!(time, saving, state::SimulationState, results::Simulation
         end
         
         if save isa StateSnapshot
-            !haskey(results.snapshot, name) && begin 
-                results.snapshot[name] = DiffEqArray([snapshot, ], [time, ]) 
+            isempty(snapshot) && continue
+            !haskey(results.snapshot, name) && begin
+                results.snapshot[name] = DiffEqArray([snapshot, ], [time, ])
                 continue
             end
             push!(results.snapshot[name].t, time)
@@ -417,8 +417,8 @@ function initialise_agents(model, init_pop, tspan, params::SimulationParameters;
         cts = model.traitdefs[agent].constants
 
         init_traits_dict = Dict(init_traits)
-        c = Tuple(x => Symbolics.unwrap(substitute(x, init_traits_dict)) for x in cts)
-        tr = Tuple(x => Symbolics.unwrap(substitute(Num(x), init_traits_dict)) for x in unknowns(dyn))
+        c = Tuple(x => Symbolics.symbolic_to_float(Symbolics.unwrap(substitute(x, init_traits_dict))) for x in cts)
+        tr = Tuple(x => Symbolics.symbolic_to_float(Symbolics.unwrap(substitute(Num(x), init_traits_dict))) for x in unknowns(dyn))
 
         agent_ = AgentState(tspan[1], agent, tr, c, Vector{Tuple{Num, idType}}(), nothing)
         pop[agent][agent_.uid] = agent_ 
