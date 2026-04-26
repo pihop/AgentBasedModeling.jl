@@ -8,7 +8,7 @@ using InteractiveUtils
 begin
     import Pkg
     # activate a temporary environment
-#    Pkg.activate(mktempdir())
+    Pkg.activate(mktempdir())
     Pkg.add([
         Pkg.PackageSpec(name="Catalyst"),
         Pkg.PackageSpec(name="ModelingToolkit"),
@@ -22,7 +22,7 @@ begin
 		Pkg.PackageSpec(name="GraphMakie"),
 		Pkg.PackageSpec(name="StatsBase"),
 		Pkg.PackageSpec(name="Interpolations"),
-#		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
+		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
     ])
 	using AgentBasedModeling
 	using Catalyst
