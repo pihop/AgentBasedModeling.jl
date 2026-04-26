@@ -29,8 +29,8 @@ begin
     ])
 	using OrdinaryDiffEq
 	using AgentBasedModeling
-    using ModelingToolkit
 	using Catalyst
+    using ModelingToolkit
 	using Distributions
 	using LinearAlgebra
 	using CairoMakie
@@ -69,6 +69,7 @@ begin
 		
 	cell_dynamics = @reaction_network begin
         @variables s(t) τ(t)
+	    @parameters α K kprod
 		@species p(t) N(t) InfCount(t)
 	    @equations begin
 	        D(s) ~ hill(N, α, K, 1.0)*s

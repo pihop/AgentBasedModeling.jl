@@ -12,6 +12,7 @@ module AgentBasedModeling
     using OrdinaryDiffEq
     using OrdinaryDiffEqCore
     using StochasticDiffEq
+    using LinearSolve
 
     using ModelingToolkit
     MT = ModelingToolkit

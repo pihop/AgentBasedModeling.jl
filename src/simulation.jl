@@ -51,7 +51,7 @@ struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S,iType}
         ps::T, 
         tspan, 
         Δt, 
-        solver::DEAlg=Rodas4(); 
+        solver::DEAlg=Rodas5(linsolve=QRFactorization()); 
         jitt=1e-4, 
         maxpop=Inf, 
         snapshot::S=[], 
@@ -131,6 +131,8 @@ end
 function append_sim!(problem, agent, agentsim::Nothing, tspan, params; model)
     init = agent.init_trait
 
+    tspan[end] - agent.btime < sqrt(eps(tspan[end])) && return nothing
+
     sim, alg = simulate_internal(
         problem, agent, init, (agent.btime, tspan[end]), params; model=model)
 
@@ -145,7 +147,7 @@ function append_sim!(problem, agent, agentsim::Union{ODESolution, RODESolution},
     k_ = first.(agent.init_trait)
     init = Tuple(k_ .=> agent.simulation(tspan[1]; idxs=collect(k_)))
 
-    tspan[2] == tspan[1] && return nothing
+    tspan[2] - tspan[1] < sqrt(eps(tspan[2])) && return nothing
     sim, alg = simulate_internal(problem, agent, init, tspan, params; model=model)
 
     ts = [agentsim.t; sim.t]
@@ -376,7 +378,12 @@ function log_snapshot!(time, saving, state::SimulationState, results::Simulation
             if save isa StateSnapshot 
                 !isequal(agent.sym, save.agent) && continue
                 if in(save.trait, Set(unknowns(state.model.traitdefs[agent.sym].dynamics)))
-                    push!(snapshot, agent.simulation(time; idxs=save.trait)[1])
+                    val = if isapprox(time, agent.btime; atol=1e-12)
+                        get(Dict(agent.init_trait), save.trait, agent.simulation(time; idxs=save.trait)[1])
+                    else
+                        agent.simulation(time; idxs=save.trait)[1]
+                    end
+                    push!(snapshot, val)
                 end
 
                 constsyms = first.(state.model.traitdefs[agent.sym].constants)
