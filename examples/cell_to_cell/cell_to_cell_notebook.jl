@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.13
+# v0.20.24
 
 using Markdown
 using InteractiveUtils
@@ -224,7 +224,7 @@ function make_simulation_params(K_, popsize)
     Ω = 2 
     # Simulator timestep.
     Δt = 1.0
-    tspan_pop = (0.0, 2000.0)
+    tspan_pop = (0.0, 500.0)
 
     sparams = SimulationParameters(
         [α => 1.0, kprod => Ω*1.0, μsize => 10.0, cv2size => 0.1,
