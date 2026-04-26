@@ -234,7 +234,9 @@ function simulate_bulk(nsim, Npop, I0, mparams, tspan, Δt; model)
 	println("Simulation started")
 	telapse = @elapsed begin
 		solns = Vector(undef, nsim)
-		Threads.@threads for i in 1:nsim
+        # For multithreading
+#		Threads.@threads for i in 1:nsim
+		for i in 1:nsim
 			res = simulate(model, init_pop, simulation_params; showprogress=false)
 			solns[i] = AgentBasedModeling.build_snapshot_solution(
 				res.snapshot; names=[:I, :S, :R])
