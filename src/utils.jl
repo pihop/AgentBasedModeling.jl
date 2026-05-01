@@ -177,6 +177,7 @@ function extend_problem(prob::DiffEqBase.SDEProblem, jumps; rng = DEFAULT_RNG)
     end
 
     u0 = JumpProcesses.extend_u0(prob, length(jumps), rng)
+    fill!(u0.jump_u, zero(eltype(u0.jump_u)))
     f = SDEFunction{isinplace(prob)}(jump_f, jump_g; sys = prob.f.sys,
         observed = prob.f.observed)
     SDEProblem(f, prob.g, u0, prob.tspan, prob.p; prob.kwargs...)
