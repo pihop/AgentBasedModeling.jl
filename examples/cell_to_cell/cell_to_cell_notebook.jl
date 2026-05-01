@@ -69,7 +69,7 @@ begin
 	    @equations begin
 	        D(s) ~ α*s
 	    end
-	    s*hill(p, kprod, s*K, 2) + d, 0 --> p
+        s*hill(p, kprod, s*K, 2) + d, 0 --> p, [physical_scale = PhysicalScale.Jump]
 	end
 
 	Cell = AgentDynamics(cell_dynamics, (s0, ))
@@ -275,20 +275,20 @@ begin
 	function plot_traj!(ax, res; color)
 	    for cell in collect(values(res.final_pop[C]))[1:1]
 	        lin = AgentBasedModeling.lineage(res, cell)
-	        traj_t = []
-	        traj_u = []
+	        traj_t = Float64[]
+	        traj_u = Float64[]
 	        for cell in lin
 	            btime = cell.btime
 	            dtime = !isnothing(cell.dtime) ? cell.dtime : cell.simulation.t[end]
 	            isinf(dtime) && break
 	            tspan = btime:1.0:dtime
-	            push!(traj_t, collect(tspan)...)
-	            push!(traj_u, cell.simulation(tspan; idxs=p).u...)
+	            append!(traj_t, tspan)
+	            append!(traj_u, cell.simulation(tspan; idxs=p).u)
 	        end
 	        lines!(ax, traj_t, traj_u; color=color[1], linewidth=1.0)
 	    end
-	    
-	    lines!(ax, res.snapshot[:Envp].t, getindex.(res.snapshot[:Envp].u, 1); color=color[2], linewidth=1) 
+
+	    lines!(ax, res.snapshot[:Envp].t, getindex.(res.snapshot[:Envp].u, 1); color=color[2], linewidth=1)
 	end
 end;
 
@@ -353,22 +353,18 @@ begin
 	    ys = getindex.(buch, 1) .- offset
 	
 	    y1 = ys[end]
-	    x1 = xs[end] 
+	    x1 = xs[end]
 	    m = y1 / x1
 	
-	    detrend = collect(zip(xs, ys .- m .* xs))
-	
-	    # Guard: if y1 ≈ 0, range_ would have step=0 → skip smoothing
-	    if abs(y1) < 1e-10
-	        return Point.(detrend)
-	    end
-	
 	    nbins = 50
+	
+	    abs(y1) < 1e-10 && return Point.([(x, y) for (x, y) in zip(xs, ys .- m .* xs)])
 	
 	    range_ = range(0.0, stop=y1, length=nbins)
 	    bins = collect(zip(range_, range_[2:end]))
 	
 	    binsx = [[] for i = 1:length(bins)]
+	    detrend = zip(xs, ys .- m .* xs)
 	
 	    for (x, y) in detrend
 	        idx = findfirst(b -> b[1] < x < b[2], bins)
@@ -378,7 +374,6 @@ begin
 	
 	    mbins = [!isempty(x) ? mean(x) : 0.0 for x in binsx]
 	    itp = linear_interpolation(midpoints(range_), mbins; extrapolation_bc=Line())
-	    
 	    return Point.([(x, y - itp(x)) for (x,y) in detrend])
 	end
 end;
@@ -401,7 +396,7 @@ begin
 	        agent = res_pop5.agents[sym][uid]
 	        !in(agent.dinteraction, keys(agents.vertex_properties)) && continue
 	
-	        ts = range(agent.btime, stop=agent.dtime, length=10) 
+	        ts = range(agent.btime+1e-8, stop=agent.dtime, length=10) 
 	
 	        (indegree(agents, agents.vertex_properties[agent.dinteraction][1]) >= 1) &&  begin
 	            add_vertex!(agents, uid, (sym, agent.dtime)) 
@@ -423,18 +418,22 @@ begin
 	color_ = Dict("infection" => colors[1], "division" => :black, "lysis" => colors[3], "uptake" =>  RGB(8.0/256, 217.0/256, 41.0/256))
 	
 	cnx_comps = connected_components(agents)
-	
+
 	for (i, comp) in enumerate(cnx_comps)
 	    subg = induced_subgraph(agents, comp)[1]
 	    lay_ = mylayout(subg)
-	
-	    meta = [subg.edge_data[uid][4] for uid in edge_labels(subg)]
+
+	    seg_pts = Point2f[]
+	    seg_colors = Float64[]
 	    for edge in edges(subg)
-	        src_ = edge.src 
-	        dst_ = edge.dst 
+	        src_ = edge.src
+	        dst_ = edge.dst
 	        meta = subg.edge_data[(subg.vertex_labels[src_], subg.vertex_labels[dst_])][4]
-	        lines!(ax, [lay_[src_], lay_[dst_]]; color=meta, colorrange=(0.0, 10.0), colormap=range(colors[4], stop=colors[1], length=10), linewidth=1.0)
+	        push!(seg_pts, lay_[src_], lay_[dst_])
+	        push!(seg_colors, meta, meta)
 	    end
+	    isempty(seg_pts) && continue
+	    linesegments!(ax, seg_pts; color=seg_colors, colorrange=(0.0, 10.0), colormap=range(colors[4], stop=colors[1], length=10), linewidth=1.0)
 	end
 	
 	Colorbar(fig_graph[1, 1], limits = (10, 60), colormap=range(colors[4], stop=colors[1], length=10), flipaxis = false, label="phage counts")
