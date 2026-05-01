@@ -13,30 +13,25 @@ struct Variable{pType,fType} <: AbstractParameterCnx
 end
 
 function variable_subs(vars, pstate, symbs)
-    pstatesubs = Any[x => y for (x, y) in zip(symbs, pstate)]
+    # Use Dict directly to avoid rebuilding on every substitution call
+    pstatesubs = Dict{Any, Any}(x => y for (x, y) in zip(symbs, pstate))
     varstosub = Dict(var.parameter => var.symbf for var in vars)
 
-    out = []
+    out = Pair[]
+    sizehint!(out, length(vars))
     n = 1
 
-    while true
-        isempty(keys(varstosub)) && break
-        n > length(vars) && begin
-            error("Substitution of variables failed to resolve symbols $(collect(keys(varstosub))). This could result from unspecified parameter values or partially specified transitions.")
-        end
+    while !isempty(varstosub)
+        n > length(vars) && error("Substitution of variables failed to resolve symbols $(collect(keys(varstosub))). This could result from unspecified parameter values or partially specified transitions.")
 
-        for key in keys(varstosub)
-            # Substitute variable values in pstatesubs to variable expression.
-            # If no symbolic variables add the var to pstatesubs and output.
-            # Keep iterating till no symbolic variables left.
-            val = varstosub[key](Dict(pstatesubs))
-            vs = Symbolics.get_variables(val)
+        for key in collect(keys(varstosub))
+            val = varstosub[key](pstatesubs)
 
-            isempty(vs) && begin
+            if isempty(Symbolics.get_variables(val))
                 val = Symbolics.build_function(val; expression=Val{false})()
-                push!(pstatesubs, key => val)
+                pstatesubs[key] = val
                 push!(out, key => val)
-                pop!(varstosub, key)
+                delete!(varstosub, key)
             end
         end
         n += 1
@@ -358,12 +353,11 @@ function make_trait_problem(sym, dynamics::AgentDynamics{ReactionSystem{T}, N}, 
         push!(vals, (false, i))
     end
 
-    isempty(setdiff(equations(dynamics.dynamics), reactions(dynamics.dynamics))) && begin 
-        dyn = dynamics.dynamics
-        jin = JumpInputs(dyn, zeros(length(unknowns(dyn))), tspan, ps)
-        return Trait(
-            sym, 
-            JumpProblem(jin), Dict(keys .=> vals))
+    isempty(setdiff(equations(dynamics.dynamics), reactions(dynamics.dynamics))) && begin
+        dyn = complete(dynamics.dynamics)
+        op = merge(Dict(unknowns(dyn) .=> zeros(length(unknowns(dyn)))), Dict{Any,Any}(ps))
+        jprob = JumpProblem(dyn, op, tspan; aggregator=jumpaggregator, check_compatibility=false)
+        return Trait(sym, jprob, Dict(keys .=> vals))
     end
 
     prob = make_hybrid(dynamics.dynamics, zeros(length(unknowns(dynamics.dynamics))), tspan, ps; jumpaggregator=jumpaggregator)
@@ -386,36 +380,8 @@ function make_hybrid(rs, init, tspan, params;
         checks = false,
         combinatoric_ratelaws=Catalyst.get_combinatoric_ratelaws(rs),
         include_zero_odes=true)
-    # Temporary fix workaround. Remove when hybrid systems supported by Catalyst.
-
-    flatrs = Catalyst.flatten(rs)
-    eqs = Any[assemble_hybrid_jumps(flatrs)...]
-    ists, ispcs = Catalyst.get_indep_sts(flatrs)
-    eqs, us, ps, obs, defs = Catalyst.addconstraints!(eqs, flatrs, ists, ispcs; 
-        remove_conserved = false)
-
-    iv = get_iv(flatrs)
-    D = Differential(iv)
-
-    for u in us
-        has_ode = any(eq -> eq isa Equation && isequal(eq.lhs, D(u)), eqs)
-        if !has_ode
-            push!(eqs, D(u) ~ 0)
-        end
-        # if D(u) not equations add D(u) ~ 0
-    end
-
-    jsys = JumpSystem(eqs, get_iv(flatrs), us, ps;
-            observed = obs,
-            name,
-            initial_conditions = MT.initial_conditions(flatrs),
-            checks,
-            discrete_events = MT.discrete_events(flatrs),
-            continuous_events = MT.continuous_events(flatrs),)
-
-    cjsys = complete(jsys)
-    op = merge(Dict(unknowns(cjsys) .=> init), Dict{Any,Any}(params))
-    return JumpProblem(cjsys, op, tspan; aggregator = jumpaggregator, check_compatibility = false)
+    op = merge(Dict(unknowns(rs) .=> init), Dict{Any,Any}(params))
+    return HybridProblem(rs, op, tspan)
 end
 
 
@@ -495,6 +461,7 @@ function get_trait_value(agent::AgentState, t::Float64, pair)::Float64
     # pair = (Bool, Int) where pair[1] is whether the trait is constant and
     # pair[2] is the index of the trait in a simulation.
     pair[1] && return last(agent.consts[pair[2]])
+    isapprox(t, agent.btime; atol=sqrt(eps(t))) && return last(agent.init_trait[pair[2]])
     return @inbounds agent.simulation(t; continuity = :right)[pair[2]]
 end
 

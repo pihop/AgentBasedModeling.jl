@@ -47,8 +47,7 @@ standard_sir = @reaction_network begin
 end
 p  = (:μ => μ_, :γ => γ_, :β => β_)
 u0 = [:I => I0, :S => N - I0, :R => 0]
-dprob = DiscreteProblem(standard_sir, u0, tspan, p)
-jprob = JumpProblem(standard_sir, dprob, Direct())
+jprob = JumpProblem(standard_sir, u0, tspan, p; aggregator=Direct())
 eprob = EnsembleProblem(jprob)
 esol = solve(eprob, SSAStepper(), EnsembleThreads(); trajectories = 10000)
 esum = EnsembleSummary(esol, tspan[1]:Δt:tspan[2]; )

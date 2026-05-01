@@ -51,10 +51,10 @@ struct SimulationParameters{T,DEAlg,JumpAlg,JAgg,K,S,iType}
         ps::T, 
         tspan, 
         Δt, 
-        solver::DEAlg=Rodas5(linsolve=QRFactorization()); 
+        solver::DEAlg=Rodas4(); 
         jitt=1e-4, 
         maxpop=Inf, 
-        snapshot::S=[], 
+        snapshot::S=[],
         jumpsolver=SSAStepper(), 
         jumpaggregator::JAgg=Direct(), 
         interpolation=SciMLBase.LinearInterpolation,
