@@ -182,7 +182,7 @@ Give an initial population of single cell with protein count 0, age 0, size 0.4.
 """
 
 # ╔═╡ fac12c07-df5b-481f-b5da-d79c9db46a56
-initial_population = [C => (p => 0.0, s => 0.40, Δ => 0.0), ];
+initial_population = [C => (p => 25.0, s => 0.40, Δ => 0.0), ];
 
 # ╔═╡ eb2d10e3-4872-4f7f-8f8d-2bc5903abea1
 md"""
@@ -197,7 +197,7 @@ begin
 	Δt = 1.0
 	
 	params = SimulationParameters(
-	    [α => 1.0, kprod => 10.0, b => 6.0, L => 0.01], timespan, Δt; maxpop=5000)
+	    [α => 1.0, kprod => 10.0, b => 6.0, L => 0.01], timespan, Δt; maxpop=5_000)
 end;
 
 
@@ -244,9 +244,9 @@ begin
 	barstransp = 0.3
 
 	pt_cm = 2.83465
-	fig = Figure(size=(300, 70) .* pt_cm; fontsize=8, pt_per_unit=1)
-	ax_protein = Axis(fig[1,1]; xlabel="Birth protein distribution", ylabel="Probability density")
-	ax_size = Axis(fig[1,2]; xlabel="Birth size distribution", ylabel="Probability density")
+	fig = Figure(size=(200, 50) .* pt_cm; fontsize=10, pt_per_unit=1)
+	ax_protein = Axis(fig[1,1]; xlabel="birth protein distribution", ylabel="probability")
+	ax_size = Axis(fig[1,2]; xlabel="birth size distribution", ylabel="probability")
 	hidedecorations!.(fig.content, ticklabels = false, ticks = false, label = false)
 	hidespines!.(fig.content, :t, :r) 
 	xlims!(ax_protein, (0, 100))
@@ -291,10 +291,10 @@ Let's compare with analytical computations. These follow [(Thomas and Shahrezaei
 begin
 	#Parametrisation as in the simulation model.
 	α_ = 1.0
-	kprod_ = 10.0 
+	kprod_ = 10.0
 	b_ = 6.0
 	
-	span_ = (1e-4, 2.4)
+	span_ = (1e-5, 2.4)
 	
 	intparams = ( 
 	    abstol = 1e-4,
@@ -306,7 +306,7 @@ begin
 	
 	ddist = Beta(100)
 	
-	kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0) / u, (span_[1], min(1.0, s/s0)))
+	kernelf(s, s0) = IntegralProblem((u,p) -> 2*pdf(ddist, u) * phi(s/u, s0), (span_[1], min(1.0, s/s0)))
 	ker(s, s0) = solve(kernelf(s, s0), QuadGKJL(); intparams...).u
 	
 	function trapz(fx, xstep)
@@ -336,7 +336,7 @@ begin
 	    return Ai
 	end
 	
-	N = 50
+	N = 80
 	sstep_ = (span_[2]-span_[1])/(N-1)
 	srange_ = collect(range(span_[1], stop=span_[2], length=N))
 	A = volterra(ker, span_, N)
@@ -356,23 +356,45 @@ begin
 	end
 
 	sintspan_ = [span_[1], span_[2]]
-	# Birth protein counts. Use concentration homeostasis. 
-	dist(kprod, b, α, s) = NegativeBinomial(kprod/(α), 1/(1+b*s)) 
+	# Birth protein counts. Use concentration homeostasis.
+	dist(kprod, b, α, s) = NegativeBinomial(kprod/(α), 1/(1+b*s))
 	Pi(x, s) = pdf(dist(kprod_, b_, α_, s), x)
 	Bpdf(x, x_, θ) = pdf(Binomial(x_, θ), x)
-	
-	# Integrate
-	rhoint(x, x_, s_, s0) = IntegralProblem((u, p) ->  rho(s_, u, s0), sintspan_)
-	Pi0int(x, x_, s0) = IntegralProblem(
-	    (u,p) -> Bpdf(x, x_, s0/u)*solve(rhoint(x, x_, u, s0), QuadGKJL(); intparams...).u *Pi(x_, u), (s0, sintspan_[end]))
-	Pi0(x, x_, s0)  = solve(Pi0int(x, x_, s0), QuadGKJL(); intparams...).u
-	
-	xs_ = collect(range(0, stop=150, step=5))
+
+	# Precompute F(s_) = ∫ phi(s_, v)*psi(v) dv over sintspan_.
+	# rhoint factors as: (1/psi(s0))*(s0/s_)*pdf(ddist, s0/s_) * F(s_)
+	# so F does not depend on s0 and only needs to be computed once.
+	s_grid = range(sintspan_[1], stop=sintspan_[2], length=200)
+	F_vals = [solve(IntegralProblem((v,p) -> phi(s_, v)*psi(v), sintspan_),
+	               QuadGKJL(); abstol=1e-8, reltol=1e-8).u for s_ in s_grid]
+	F_interp = linear_interpolation(s_grid, F_vals, extrapolation_bc=Line())
+
+	rhoint_fast(s_, s0) = (1/psi(s0)) * (1/s_) * pdf(ddist, s0/s_) * F_interp(s_)
+
+	xs_ = collect(range(0, stop=200, step=1))
 	xstep_ = xs_[2] - xs_[1]
-	array_dists(x, s0) = map(x_ -> Pi0(x, x_, s0), xs_)
-	ss_ = range(sintspan_[1], stop=sintspan_[2], length=20)
-	
-	mat = [array_dists(x, s) for x in xs_, s in ss_]
+
+	# Precompute Pi(x_, s) — one interpolator per x_ value, avoids NegativeBinomial
+	# construction at every quadrature point.
+	Pi_interp = [linear_interpolation(s_grid,
+	    [pdf(NegativeBinomial(kprod_/α_, 1/(1+b_*s)), Int(x_)) for s in s_grid],
+	    extrapolation_bc=Line()) for x_ in xs_]
+
+	Pi0int_fast(x, xi_, s0) = IntegralProblem(
+	    (u,p) -> Bpdf(x, xs_[xi_], s0/u) * rhoint_fast(u, s0) * Pi_interp[xi_](u),
+	    (s0, sintspan_[end]))
+
+	Pi0_fast(x, xi_, s0) = solve(Pi0int_fast(x, xi_, s0), QuadGKJL(); intparams...).u
+	array_dists(x, s0) = [Pi0_fast(x, xi_, s0) for xi_ in eachindex(xs_)]
+
+	ss_ = range(sintspan_[1], stop=sintspan_[2], length=N)
+
+	mat = Matrix{Vector{Float64}}(undef, length(xs_), length(ss_))
+	Threads.@threads for j in eachindex(ss_)
+	    for i in eachindex(xs_)
+	        mat[i, j] = array_dists(xs_[i], ss_[j])
+	    end
+	end
 	mat_ = hcat([row .* psi_tree_.(ss_) for row in eachrow(mat)]...)'
 	mat_ = trapz.(mat_, Ref(xstep_))
 	mat_s = trapz.(eachrow(mat_), Ref(sstep_))
@@ -388,7 +410,7 @@ begin
 	lines!(ax_protein, xs_, mat_s ./ mat_sx; color=colors[10], label="Analytical solution")
 	#Legend(fig[2,:], ax_protein; orientation=:horizontal)
 	xlims!(ax_protein, (0,  100))
-	xlims!(ax_size, (0.2,  1.2))
+	xlims!(ax_size, (0.1,  1.2))
 end;
 
 # ╔═╡ 07d7b398-34b8-4198-9f92-eb58763d04bf
@@ -443,9 +465,9 @@ taking as aguments the results structure and an AgentState and returing a list o
 
 # ╔═╡ 14bf24fc-5339-4531-8388-fc3d1e640c9d
 begin
-	fig_traj = Figure(size=(300, 80) .* pt_cm; fontsize=8, pt_per_unit=1)
-	ax_protein_traj = Axis(fig_traj[1,1]; xlabel="Protein lineage trajectories", ylabel="Probability density")
-	ax_size_traj = Axis(fig_traj[1,2]; xlabel="Size lineage trajectories", ylabel="Time")
+	fig_traj = Figure(size=(200, 50) .* pt_cm; fontsize=10, pt_per_unit=1)
+	ax_protein_traj = Axis(fig_traj[1,1]; xlabel="time", ylabel="protein count")
+	ax_size_traj = Axis(fig_traj[1,2]; xlabel="time", ylabel="size")
 	hidedecorations!(ax_protein_traj, ticklabels = false, ticks = false, label = false)
 	hidespines!(ax_protein_traj, :t, :r) 
 
@@ -492,6 +514,10 @@ begin
 	# Random lineage as solid lines.
 	agent = rand(collect(values(res.final_pop[C])))
 	plot_lineage(ax_size_traj, ax_protein_traj, agent; color = colors[1], linewidth=1.2)
+    xlims!(ax_size_traj, (2, 8))
+    xlims!(ax_protein_traj, (2, 8))
+    ylims!(ax_size_traj, (0, 1.0))
+    ylims!(ax_protein_traj, (0, 80))
 	fig_traj
 end
 
@@ -539,7 +565,8 @@ Plotting.
 
 # ╔═╡ 2fad00bd-69d5-4420-897b-e29b809f563d
 begin	
-	fig_tree = Figure(size=(300, 80) .* pt_cm; fontsize=8, pt_per_unit=1)
+#	fig_tree = Figure(size=(150, 70) .* pt_cm; fontsize=8, pt_per_unit=1)
+    fig_tree = Figure(size=(80, 60) .* pt_cm; fontsize=10, pt_per_unit=1)
 	ax = Axis(fig_tree[1,2], xlabel="Time")
 	hidedecorations!.(fig_tree.content, ticks = false, label = false, ticklabels=false)
 	hideydecorations!.(fig_tree.content)

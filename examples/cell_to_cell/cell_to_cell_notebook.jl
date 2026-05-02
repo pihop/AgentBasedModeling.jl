@@ -69,7 +69,7 @@ begin
 	    @equations begin
 	        D(s) ~ α*s
 	    end
-        s*hill(p, kprod, s*K, 2) + d, 0 --> p, [physical_scale = PhysicalScale.Jump]
+        s*hill(p, kprod, s*K, 2) + d, 0 --> p
 	end
 
 	Cell = AgentDynamics(cell_dynamics, (s0, ))
@@ -224,7 +224,7 @@ function make_simulation_params(K_, popsize)
     Ω = 2 
     # Simulator timestep.
     Δt = 1.0
-    tspan_pop = (0.0, 500.0)
+    tspan_pop = (0.0, 1000.0)
 
     sparams = SimulationParameters(
         [α => 1.0, kprod => Ω*1.0, μsize => 10.0, cv2size => 0.1,
