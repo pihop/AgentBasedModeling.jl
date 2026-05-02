@@ -24,7 +24,8 @@ using ModelingToolkit
 using Catalyst
 using Distributions
 
-@variables t τ(t) s(t)
+@independent_variables t
+@variables τ(t) s(t)
 @species C(τ)
 @parameters a μ cv L Cs Cτ
 
@@ -38,7 +39,7 @@ Cell = AgentDynamics(CellDynamics, ())
 Define the division interaction dividing the cell and creating two daughter cells with half the size each. 
 ```julia
 # Hazard of gamma distribution.
-gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/μ, μ*cv), x))
+gammahaz(μ,cv,x) = exp(logpdf(Gamma(1/cv, μ*cv), x) - logccdf(Gamma(1/cv, μ*cv), x))
 # Adder rule for cell division.
 γdiv(μ, cv, s, τ, a) = gammahaz(μ, cv, s - s*exp(-a*τ))
 @register_symbolic γdiv(μ, cv, s, τ, a)
