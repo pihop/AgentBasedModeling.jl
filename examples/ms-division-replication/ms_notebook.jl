@@ -1,26 +1,8 @@
 ### A Pluto.jl notebook ###
-# v0.20.21
+# v0.20.24
 
 using Markdown
 using InteractiveUtils
-
-# ╔═╡ 355d1e6c-91f6-11ef-2f45-19eb05b5141f
-begin
-	using OrdinaryDiffEq
-	using JumpProcesses
-	using LinearAlgebra
-	using CairoMakie
-	using StatsBase
-	using Integrals
-	using Graphs
-	using MetaGraphsNext
-	using NetworkLayout
-	using Interpolations
-	using ColorSchemes
-end
-
-# ╔═╡ e1a5f259-5045-426a-b376-698bff75e96a
-using Catalyst, Distributions, AgentBasedModeling
 
 # ╔═╡ 4e3e20d3-d152-4c26-a1f8-a0f4d11cf025
 md"""
@@ -137,7 +119,7 @@ end;
 # ╔═╡ 08559fb8-3342-4df5-80d8-4ad280eb472e
 md"""
 # Step 3: simulation
-""
+"""
 
 # ╔═╡ ae0cdda0-fdcf-4eae-b342-d2bf4dd5689d
 begin
@@ -309,7 +291,46 @@ begin
 end;
 
 # ╔═╡ 07d7b398-34b8-4198-9f92-eb58763d04bf
-fi
+fig
+
+# ╔═╡ e1a5f259-5045-426a-b376-698bff75e96a
+using Catalyst, Distributions, AgentBasedModeling
+
+# ╔═╡ 355d1e6c-91f6-11ef-2f45-19eb05b5141f
+begin
+    import Pkg
+    # activate a temporary environment
+    Pkg.activate(mktempdir())
+    Pkg.add([
+        Pkg.PackageSpec(name="Catalyst"),
+        Pkg.PackageSpec(name="ModelingToolkit"),
+		Pkg.PackageSpec(name="Distributions"),
+		Pkg.PackageSpec(name="CairoMakie"),
+		Pkg.PackageSpec(name="ColorSchemes"),
+		Pkg.PackageSpec(name="Colors"),
+		Pkg.PackageSpec(name="Graphs"),
+		Pkg.PackageSpec(name="MetaGraphsNext"),
+		Pkg.PackageSpec(name="NetworkLayout"),
+		Pkg.PackageSpec(name="GraphMakie"),
+		Pkg.PackageSpec(name="StatsBase"),
+		Pkg.PackageSpec(name="Interpolations"),
+		Pkg.PackageSpec(url="https://github.com/pihop/AgentBasedModeling.jl")
+    ])
+	using AgentBasedModeling
+	using Catalyst
+	using ModelingToolkit
+	using Distributions
+	using LinearAlgebra
+	using Interpolations
+	using CairoMakie
+	using StatsBase
+	using ColorSchemes
+	using Colors
+	using Graphs
+	using MetaGraphsNext
+	using GraphMakie
+	using NetworkLayout
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
